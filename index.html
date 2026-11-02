@@ -1610,6 +1610,7 @@ function collide(pos, radius, feet, height, who) {
   for (let it = 0; it < 2; it++) forCols(pos.x, pos.z, radius + 2, (c) => {
     if (!c.on || !(c.who & who)) return;
     if (feet >= c.y1 || feet + height <= c.y0) return;
+    if (c.step && c.y1 <= feet + 0.42) return;
     const dx = pos.x - c.x, dz = pos.z - c.z;
     if (c.t === 'c') {
       const d2 = dx * dx + dz * dz, r2 = c.r + radius;
@@ -2203,7 +2204,7 @@ function lamp(x, z, side, alongX, tall) {
     LAMP_HEADS.push({ id: LAMP_HEADS.length, x: x + hx, y: H - 0.2, z: z + hz, hx: alongX ? 0.17 : 0.31, hy: 0.13, hz: alongX ? 0.31 : 0.17, c: 1, s: 0, light, cone, alive: true, tDead: 0,
       bm: new THREE.Matrix4().compose(new V3(x + hx, H - 0.28, z + hz), new THREE.Quaternion(), new V3(alongX ? 0.24 : 0.48, 0.04, alongX ? 0.48 : 0.24)) });
   }
-  addCircle(x, z, 0.2);
+  addCircle(x, z, 0.2, -1, H);
 }
 LAMPS_DEF.forEach((l) => lamp(l.x, l.z, l.side, l.alongX));
 PARK_LAMPS.forEach(([x, z]) => lamp(x, z, 1, false, true));
@@ -2303,7 +2304,7 @@ function flamingo(x, z, ang) {
   B.add(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 8), MAT.pole, M4(7.6, 1.6, 7.6));
   B.add(boxG(1.7, 0.32, 0.03), MAT.signStreet, M4(7.6, 3.05, 7.6, 0, Math.PI / 2, 0));
   B.add(boxG(1.7, 0.32, 0.03), MAT.signAve, M4(7.6, 2.72, 7.6, 0, 0, 0));
-  addCircle(7.6, 7.6, 0.12);
+  addCircle(7.6, 7.6, 0.12, -1, 3.3);
   for (const s of [-1, 1]) {
     B.add(boxG(4.6, 0.32, 0.08), MAT.stripes, M4(s * 3.1, 0.95, 91.6));
     B.add(boxG(4.6, 0.32, 0.08), MAT.stripes, M4(s * 3.1, 0.45, 91.6));
@@ -2312,7 +2313,7 @@ function flamingo(x, z, ang) {
   }
   B.add(boxG(2.2, 0.8, 0.05), MAT.signRoad, M4(0, 1.75, 91.62));
   for (const k of [-1, 1]) B.add(boxG(0.06, 1.4, 0.06), MAT.white, M4(k * 0.9, 0.7, 91.66));
-  addBox(0, 91.6, 6, 0.4, 0);
+  addBox(0, 91.6, 6, 0.4, 0, -1, 2.2);
   // télé qui grésille
   const tx = -12.2, tz = 12.5;
   B.add(boxG(0.9, 0.62, 0.6), MAT.white, M4(tx, 0.31, tz)); addBox(tx, tz, 0.45, 0.3, 0, -1, 0.62); addFloorOBB(tx, tz, 0.45, 0.3, 0, 0.62);
@@ -2340,7 +2341,7 @@ for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; bushes.push([BULB
 for (let i = 0; i < 18; i++) { const z = R() < 0.5 ? rr(-70, -16) : rr(48, 72); bushes.push([rr(-104, -76), 0.5, z, rr(0.6, 1.2), BUSH_COLORS[(R() * BUSH_COLORS.length) | 0]]); }
 
 /* ---------- zones d'ambiance ---------- */
-addZone((p) => p.x > 72 ? clamp((p.x - 72) / 10, 0, 1) : 0, { fog: 0.0034, bloom: 0.85, expo: 1.0 });
+addZone((p) => p.x > 72 ? clamp((p.x - 72) / 10, 0, 1) : 0, { fog: 0.0034, bloom: 0.6, expo: 0.92 });
 addZone((p) => p.x < -72 ? clamp((-72 - p.x) / 10, 0, 1) : 0, { fog: 0.0042, bloom: 0.55, expo: 1.08 });
 addZone((p) => p.z < -70 && Math.abs(p.x) < 48 ? clamp((-70 - p.z) / 12, 0, 1) * clamp((48 - Math.abs(p.x)) / 12, 0, 1) : 0, { fog: 0.0105, bloom: 0.75, expo: 1.06 });
 addZone((p) => p.y > 9 ? clamp((p.y - 9) / 4, 0, 1) : 0, { fog: 0.0028, bloom: 0.7, expo: 1.12 });
@@ -2571,6 +2572,8 @@ function parasol(x, y, z, col) {
   return destrAdd({ parts: [[new THREE.CylinderGeometry(0.04, 0.04, 2.4, 8), MAT.white, M4(x, y + 1.2, z)], [new THREE.ConeGeometry(1.6, 0.55, 12, 1, true), colorMat(col, { side: THREE.DoubleSide }), M4(x, y + 2.35, z)], [new THREE.SphereGeometry(0.07, 8, 6), MAT.white, M4(x, y + 2.64, z)]],
     x, y: y + 2.3, z, hx: 1.45, hy: 0.36, hz: 1.45, kind: 'tissu', hp: 3, color: col, colBox: { r: 0.1, y0: y - 1, y1: y + 2.6 } });
 }
+const DIVES = [];
+function updateDives(dt) { for (const d of DIVES) { d.v += (-d.dip * 160 - d.v * 9) * dt; d.dip += d.v * dt; d.piv.rotation.x = d.dip; } }
 function spawnRipple(p, x, z, amp) { const r = p.ripples[p.rippleI]; r.set(x - p.cx, z - p.cz, clockU.value, amp); p.rippleI = (p.rippleI + 1) % p.ripples.length; }
 function buildPool(def, idx) {
   const p = Object.assign({}, def);
@@ -2633,10 +2636,17 @@ function buildPool(def, idx) {
     // plongeoir
     const bx = p.cx, bz0 = p.z0 - 1.6;
     B.add(boxG(0.9, 0.7, 0.9), MAT.white, M4(bx, 0.35, bz0 - 0.2));
-    B.add(boxG(0.56, 0.08, 3.6), colorMat('#7ff0ff', { roughness: 0.4 }), M4(bx, 0.86, bz0 + 1.4, 0.03));
-    addBox(bx, bz0 - 0.2, 0.45, 0.45, 0, -1, 0.7);
+    B.add(boxG(0.9, 0.35, 0.5), MAT.white, M4(bx, 0.175, bz0 - 0.9)); addFloorOBB(bx, bz0 - 0.9, 0.45, 0.25, 0, 0.35);
+    addBox(bx, bz0 - 0.2, 0.45, 0.45, 0, -1, 0.7).step = true;
     addFloorOBB(bx, bz0 - 0.2, 0.45, 0.45, 0, 0.7);
-    addFloorOBB(bx, bz0 + 1.4, 0.3, 1.8, 0, 0.92, { springy: true });
+    // la planche est articulée côté socle : elle plie quand on atterrit et renvoie en l'air
+    const piv = new THREE.Group(); piv.position.set(bx, 0.82, bz0 - 0.4); world.add(piv);
+    const plank = new THREE.Mesh(boxB(-0.28, 0.28, 0, 0.08, 0, 3.6), colorMat('#7ff0ff', { roughness: 0.4 })); plank.castShadow = true; plank.receiveShadow = true; plank.userData.surface = 'dur'; piv.add(plank); SHOOT.push(plank);
+    const dive = { piv, dip: 0, v: 0 };
+    DIVES.push(dive);
+    addFloorOBB(bx, bz0 + 1.4, 0.3, 1.8, 0, 0.92, { springy: true, board: dive });
+    // au-dessus de la plage on ne traverse plus la planche
+    addBox(bx, bz0 + 0.8, 0.3, 1.2, 0, 0.55, 0.92).step = true;
     // chaise du maître-nageur
     const lx = p.x1 + 1.6, lz = p.z1 - 1;
     for (const sx of [-0.35, 0.35]) for (const sz of [-0.35, 0.35]) B.add(boxG(0.07, 2.2, 0.07), MAT.white, M4(lx + sx, 1.1, lz + sz));
@@ -2836,6 +2846,7 @@ function buildTower(p, li) {
     B.add(boxG(0.62, 0.1, 1.62), stepMat, M4(tx + Math.sin(a) * 1.25, h - 0.05, tz + Math.cos(a) * 1.25, 0, a, 0));
     addFloorRing(tx, tz, 0.4, 2.08, h, a + Math.PI, Math.PI - DA * 0.5 - 0.02);
     if (i % 2 === 0) B.add(new THREE.CylinderGeometry(0.02, 0.02, 0.95, 5), MAT.chrome, M4(tx + Math.sin(a) * 2.02, h + 0.47, tz + Math.cos(a) * 2.02));
+    for (const da of [-0.5, 0, 0.5]) { const ar = a + da * DA; addCircle(tx + Math.sin(ar) * 2.06, tz + Math.cos(ar) * 2.06, 0.1, h - 0.35, h + 1.15); }
   }
   { const pts = []; for (let i = 0; i <= 60; i++) { const a = a0 + (i / 60) * (NS - 1) * DA, h = (1 + (i / 60) * (NS - 1)) * RISE + 0.95; pts.push(new V3(tx + Math.sin(a) * 2.02, h, tz + Math.cos(a) * 2.02)); } B.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 120, 0.03, 6), MAT.chrome, M4()); }
   // plateforme avec une ouverture au-dessus des dernières marches
@@ -3261,7 +3272,7 @@ function structure(h) {
   const mk = (list, mat) => { const geo = mergeList(list.map(([gg, m]) => [gg, h.M.clone().multiply(m)])); const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData.surface = 'dur'; g.add(mesh); SHOOT.push(mesh); return mesh; };
   mk(R0, roofMat); mk(TR.concat(CE, WC), MAT.trim);
   const [ax, az] = h.toW(dx + 1.25, 1.65), [bx2, bz2] = h.toW(dx - 1.25, 1.65);
-  h.postCols = [addCircle(ax, az, 0.16), addCircle(bx2, bz2, 0.16)];
+  h.postCols = [addCircle(ax, az, 0.16, -1, 2.8), addCircle(bx2, bz2, 0.16, -1, 2.8)];
   // on peut marcher sur les toits (et sur la cheminée)
   const W = (lx, lz) => h.toW(lx, lz);
   const [rx, rz] = W(h.ox, -4.8), [gx3, gz3] = W(h.gx, -2.4), [px3, pz3] = W(dx, 0.85), [cx3, cz3] = W(chu, chw);
@@ -3486,18 +3497,20 @@ for (const s of SHOPS) {
   // dalle, murs, toit
   B.add(boxG(D, 0.15, L), MAT.concrete, M4(FX + D / 2, 0.075, (z0 + z1) / 2), false, true);
   addFloorRect(FX, x1, z0, z1, 0.15);
-  B.add(boxG(0.3, h, L + 0.3), wm, M4(x1, h / 2, (z0 + z1) / 2)); addBox(x1, (z0 + z1) / 2, 0.15, L / 2 + 0.15, 0);
-  for (const zz of [z0, z1]) { B.add(boxG(D, h, 0.3), wm, M4(FX + D / 2, h / 2, zz)); addBox(FX + D / 2, zz, D / 2, 0.15, 0); }
+  B.add(boxG(0.3, h, L + 0.3), wm, M4(x1, h / 2, (z0 + z1) / 2)); addBox(x1, (z0 + z1) / 2, 0.15, L / 2 + 0.15, 0, -1, h + 0.4);
+  for (const zz of [z0, z1]) { B.add(boxG(D, h, 0.3), wm, M4(FX + D / 2, h / 2, zz)); addBox(FX + D / 2, zz, D / 2, 0.15, 0, -1, h + 0.4); }
   B.add(boxG(D + 0.6, 0.4, L + 0.6), wm, M4(FX + D / 2, h + 0.2, (z0 + z1) / 2));
   B.add(boxG(D + 0.4, 0.02, L + 0.2), cached('plafond', () => std({ color: C('#2e2350'), roughness: 0.9 })), M4(FX + D / 2, h - 0.01, (z0 + z1) / 2), false, false);
   addFloorRect(FX - 0.3, x1 + 0.3, z0 - 0.3, z1 + 0.3, h + 0.4, { roof: true });
-  for (const zz of [z0 - 0.15, z1 + 0.15]) B.add(boxG(D + 0.6, 0.6, 0.15), wm, M4(FX + D / 2, h + 0.7, zz));
+  const si = SHOPS.indexOf(s);
+  for (const zz of [z0 - 0.15, z1 + 0.15]) { if (zz < z0 && si > 0) continue; if (zz > z1 && si === 1) continue; B.add(boxG(D + 0.6, 0.6, 0.15), wm, M4(FX + D / 2, h + 0.7, zz)); addBox(FX + D / 2, zz, D / 2 + 0.3, 0.08, 0, h + 0.4, h + 1.0); }
   B.add(boxG(0.15, 0.6, L + 0.6), wm, M4(x1 + 0.15, h + 0.7, (z0 + z1) / 2)); B.add(boxG(0.15, 0.6, L + 0.6), wm, M4(FX - 0.15, h + 0.7, (z0 + z1) / 2));
+  addBox(x1 + 0.15, (z0 + z1) / 2, 0.08, L / 2 + 0.3, 0, h + 0.4, h + 1.0); addBox(FX - 0.15, (z0 + z1) / 2, 0.08, L / 2 + 0.3, 0, h + 0.4, h + 1.0);
   // façade : bandeau, piliers, vitrines, porte coulissante
-  B.add(boxG(0.3, h - 3.2, L + 0.3), wm, M4(FX, 3.2 + (h - 3.2) / 2, (z0 + z1) / 2));
+  B.add(boxG(0.3, h - 3.2, L + 0.3), wm, M4(FX, 3.2 + (h - 3.2) / 2, (z0 + z1) / 2)); addBox(FX, (z0 + z1) / 2, 0.15, L / 2 + 0.15, 0, 3.15, h + 0.4);
   const dz0 = s.door - 1.25, dz1 = s.door + 1.25;
   const pil = [z0, dz0, dz1, z1];
-  for (const pz of pil) { B.add(boxG(0.4, 3.2, 0.4), wm, M4(FX, 1.6, pz)); addBox(FX, pz, 0.2, 0.2, 0); }
+  for (const pz of pil) { B.add(boxG(0.4, 3.2, 0.4), wm, M4(FX, 1.6, pz)); addBox(FX, pz, 0.2, 0.2, 0, -1, 3.2); }
   const runs = [[z0 + 0.2, dz0 - 0.2], [dz1 + 0.2, z1 - 0.2]];
   for (const [a, b2] of runs) { const n = Math.max(1, Math.round((b2 - a) / 3.2)); for (let k = 0; k < n; k++) shopPane(a + (b2 - a) * k / n + 0.04, a + (b2 - a) * (k + 1) / n - 0.04, 0.35, 3.05); }
   B.add(boxG(0.3, 0.2, 2.5), MAT.chrome, M4(FX, 3.1, s.door));
@@ -3511,9 +3524,10 @@ for (const s of SHOPS) {
   sl.col = addBox(FX, s.door, 0.08, 1.2, 0, 0, 3.0);
   SLIDERS.push(sl);
   // auvent
-  B.add(boxG(5.0, 0.22, L + 0.4), MAT.white, M4(FX - 2.5, 3.9, (z0 + z1) / 2));
+  B.add(boxG(5.0, 0.22, L + 0.4), MAT.white, M4(FX - 2.5, 3.9, (z0 + z1) / 2)); addFloorRect(FX - 5.0, FX - 0.15, z0 - 0.2, z1 + 0.2, 4.01);
+  addBox(FX - 5.0, (z0 + z1) / 2, 0.06, L / 2 + 0.2, 0, 3.79, 4.01).step = true;
   B.add(boxG(5.0, 0.04, L + 0.4), cached('soffite', () => std({ color: C('#ffe6f2'), roughness: 0.6 })), M4(FX - 2.5, 3.78, (z0 + z1) / 2), false, false);
-  for (let zz = z0 + 1; zz <= z1 - 0.5; zz += 7.5) { B.add(new THREE.CylinderGeometry(0.12, 0.12, 3.8, 10), MAT.white, M4(FX - 4.6, 1.9, zz)); addCircle(FX - 4.6, zz, 0.14); addSoft(FX - 2.4, 3.5, zz + 3, s.id === 'bowling' ? '#ff9fe0' : '#ffd0b0', 1.4, 6); }
+  for (let zz = z0 + 1; zz <= z1 - 0.5; zz += 7.5) { B.add(new THREE.CylinderGeometry(0.12, 0.12, 3.8, 10), MAT.white, M4(FX - 4.6, 1.9, zz)); addCircle(FX - 4.6, zz, 0.14, -1, 3.8); addSoft(FX - 2.4, 3.5, zz + 3, s.id === 'bowling' ? '#ff9fe0' : '#ffd0b0', 1.4, 6); }
   // enseigne néon
   const sw = Math.min(L - 2, 16), sh = Math.min(2.4, h - 4.3);
   const neon = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshBasicMaterial({ map: neonTex(s.nom, s.id === 'bowling' ? '#ff5fd0' : s.id === 'disques' ? '#5ff7ff' : '#fff05f', 1024, 160, 'bold 96px "Brush Script MT","Segoe Script","Comic Sans MS",cursive'), color: HDR('#ffffff', 2.6), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
@@ -3521,6 +3535,18 @@ for (const s of SHOPS) {
   s.neon = neon;
   addSoft(FX - 2, 5.5, (z0 + z1) / 2, s.id === 'bowling' ? '#ff6fd8' : s.id === 'disques' ? '#6ff7ff' : '#fff27a', 1.6, 9, { flick: 0.08 });
   addZone((p) => (p.x > FX + 0.3 && p.x < x1 && p.z > z0 && p.z < z1 && p.y < h) ? 1 : 0, { fog: 0.0016, bloom: 0.9, expo: 1.0 });
+}
+// on passe d'un toit à l'autre : une dalle comble l'espace entre les boutiques, l'auvent devient continu
+for (let i = 0; i < SHOPS.length - 1; i++) {
+  const a = SHOPS[i], c = SHOPS[i + 1], hl = Math.min(a.h, c.h), xr = Math.min(a.x1, c.x1), za = a.z1 + (a.h > c.h ? 0.15 : 0.3), zb = c.z0 - 0.3, wm = stuccoFor(c.col);
+  B.add(boxG(xr - FX + 0.6, 0.4, zb - za), wm, M4((FX - 0.3 + xr + 0.3) / 2, hl + 0.2, (za + zb) / 2));
+  addFloorRect(FX - 0.3, xr + 0.3, za, zb, hl + 0.4);
+  B.add(boxG(0.15, 0.6, zb - za), wm, M4(xr + 0.15, hl + 0.7, (za + zb) / 2)); B.add(boxG(0.15, 0.6, zb - za), wm, M4(FX - 0.15, hl + 0.7, (za + zb) / 2));
+  addBox(xr + 0.15, (za + zb) / 2, 0.08, (zb - za) / 2, 0, hl + 0.4, hl + 1.0); addBox(FX - 0.15, (za + zb) / 2, 0.08, (zb - za) / 2, 0, hl + 0.4, hl + 1.0);
+  const g0 = a.z1 + 0.2, g1 = c.z0 - 0.2;
+  B.add(boxG(5.0, 0.22, g1 - g0), MAT.white, M4(FX - 2.5, 3.9, (g0 + g1) / 2)); B.add(boxG(5.0, 0.04, g1 - g0), cached('soffite', () => std({ color: C('#ffe6f2'), roughness: 0.6 })), M4(FX - 2.5, 3.78, (g0 + g1) / 2), false, false);
+  addFloorRect(FX - 5.0, FX - 0.15, g0, g1, 4.01);
+  B.add(boxG(0.3, hl + 0.4 - 3.2, g1 - g0), wm, M4(FX, 3.2 + (hl + 0.4 - 3.2) / 2, (g0 + g1) / 2)); addBox(FX, (g0 + g1) / 2, 0.15, (g1 - g0) / 2, 0, 3.15, hl + 0.4);
 }
 /* ---------- bowling ---------- */
 {
@@ -3740,8 +3766,10 @@ refugeWall('x', RF.z1 - 0.1, RF.x0 + 0.2, RF.x1 - 0.2, [Object.assign({ c: -101,
   B.add(boxG(W + 0.3, 0.16, Dz + 0.3), MAT.trim, M4(cx, top, cz));
   // porche
   B.add(boxG(1.8, 0.25, 4.2), MAT.wood, M4(RF.x1 + 0.9, 0.125, 0)); addFloorRect(RF.x1, RF.x1 + 1.8, -2.1, 2.1, 0.25);
-  for (const s of [-1, 1]) { B.add(new THREE.CylinderGeometry(0.08, 0.1, 2.6, 10), MAT.trim, M4(RF.x1 + 1.6, 1.55, s * 1.9)); addCircle(RF.x1 + 1.6, s * 1.9, 0.12); }
-  B.add(boxG(2.2, 0.14, 4.6), MAT.trim, M4(RF.x1 + 1.0, 2.9, 0));
+  for (const s of [-1, 1]) { B.add(new THREE.CylinderGeometry(0.08, 0.1, 2.6, 10), MAT.trim, M4(RF.x1 + 1.6, 1.55, s * 1.9)); addCircle(RF.x1 + 1.6, s * 1.9, 0.12, -1, 2.85); }
+  B.add(boxG(2.2, 0.14, 4.6), MAT.trim, M4(RF.x1 + 1.0, 2.9, 0)); addFloorRect(RF.x1 - 0.1, RF.x1 + 2.1, -2.3, 2.3, 2.97);
+  // toit à deux pans praticable
+  addFloorHip(cx, cz, (Dz + 1.2) / 2, (W + 1.2) / 2, Math.PI / 2, top, 2.3, true);
   // enseigne néon
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.62), new THREE.MeshBasicMaterial({ map: neonTex('refuge', '#ff6fb8', 512, 124), color: HDR('#ffffff', 2.8), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   sign.position.set(RF.x1 + 0.02, RFB + 2.75, 0); sign.rotation.y = Math.PI / 2; world.add(sign);
@@ -5901,7 +5929,7 @@ function teleport(from, side) {
   const others = PORTALS.filter((q) => q !== from);
   const to = others[(Math.random() * others.length) | 0];
   const nx = Math.sin(to.a) * side, nz = Math.cos(to.a) * side;
-  P.pos.set(to.x + nx * 1.4, to.y + 0.05, to.z + nz * 1.4);
+  P.pos.set(to.x + nx * 1.4, to.y + 0.05, to.z + nz * 1.4); P.slide = null;
   P.yaw += (to.a - from.a);
   const hs = Math.hypot(P.vel.x, P.vel.z); P.vel.set(-Math.sin(P.yaw) * hs, 0, -Math.cos(P.yaw) * hs);
   to.cool = 1.2; from.cool = 1.2;
@@ -5965,7 +5993,7 @@ function updatePlayer(dt) {
     const acc = P.onGround ? 11 : jetting ? 5.5 : JET.has ? 3.4 : 2.5;
     const spd = jetting ? (sprintKey ? 16 : 10.5) : speed;
     P.vel.x = damp(P.vel.x, wx * spd, acc, dt); P.vel.z = damp(P.vel.z, wz * spd, acc, dt);
-    if (jump && P.onGround && (!JET.has || JET.hold < 0.05)) { P.vel.y = lastFloor && lastFloor.springy ? 9.5 : 6.1; P.onGround = false; if (lastFloor && lastFloor.springy) sBoing(3); }
+    if (jump && P.onGround && (!JET.has || JET.hold < 0.05)) { P.vel.y = lastFloor && lastFloor.springy ? 9.5 : 6.1; P.onGround = false; if (lastFloor && lastFloor.springy) sBoing(3); if (lastFloor && lastFloor.board) lastFloor.board.v += 2.2; }
     if (jetting) { P.vel.y = Math.min(P.vel.y + (P.pos.y > 74 ? 8 : 38) * dt, P.pos.y > 80 ? 0.5 : 12); P.onGround = false; }
     P.vel.y -= (pl && feet < surf ? 6 : 19) * dt;
     if (pl && feet < surf) P.vel.y *= 1 - Math.min(1, 3 * dt);
@@ -5992,7 +6020,10 @@ function updatePlayer(dt) {
   // collé au toboggan dans les courbes
   if (P.slide && fl && fl.slide && P.pos.y > gy && P.pos.y - gy < 0.6 && P.vel.y <= 0.5) P.pos.y = gy;
   if (P.pos.y <= gy) {
-    if (fl && fl.tramp !== undefined && P.vel.y < -0.5) {
+    if (fl && fl.board && P.vel.y < -2.5) {
+      P.vel.y = Math.min(14.5, -P.vel.y * (jump ? 0.85 : 0.5) + (jump ? 5 : 0.6)); P.pos.y = gy; P.onGround = false;
+      fl.board.v += Math.min(4, 1.2 + P.vel.y * 0.25); sBoing(P.vel.y * 0.7);
+    } else if (fl && fl.tramp !== undefined && P.vel.y < -0.5) {
       const tr = TRAMPS[fl.tramp]; tr.dip = Math.min(1, -P.vel.y / 14);
       P.vel.y = clamp(-P.vel.y * 0.9 + 7 + (jump ? 3 : 0), 13, 23); P.pos.y = gy; P.onGround = false;
       sBoing(P.vel.y); spawnRing(tr.d.x, tr.top + 0.02, tr.d.z, 0.4, 2.4, 0.6, HDR('#ffd0f0', 1.4));
@@ -6988,7 +7019,7 @@ function simulate(rdt, render) {
     updateBalls(Math.min(gdt, 1 / 30), pushers);
     updateParticles(gdt);
     const du = doorUsers(players);
-    updateHouses(gdt, du); updateShops(gdt, du); updateRefuge(gdt, du); updateProps(gdt);
+    updateHouses(gdt, du); updateShops(gdt, du); updateRefuge(gdt, du); updateProps(gdt); updateDives(gdt);
     updateDestr(gdt, players); updateLamps(); updateCars(gdt); updateLagoons(gdt); updateBigBalls(gdt, pushers); updateSprinklers(gdt);
   }
   updateJetpack(rdt);
@@ -7028,7 +7059,7 @@ requestAnimationFrame((t) => { last = t; frame(t); });
 $('choixPC').disabled = false; $('choixMobile').disabled = false;
 noteEl.textContent = PREP.join ? 'Tu as été invité dans un rêve partagé : choisis ton appareil pour le rejoindre.' : '';
 if (IS_TOUCH) { try { $('choixMobile').focus({ preventScroll: true }); } catch (e) {} }
-if (DEBUG) window.__dbg = { SHOOT, rayHouses, rayBalls, rayShops, step: (n, dt) => { for (let i = 0; i < n; i++) simulate(dt || 0.05, false); }, shoot, traceShot, applyHit, curW, WEAPONS, MODELS, myBeam, refugeDoor, CROWNS, RES, softLights, zoneCur, get bloom() { return bloom; }, finalPass, scene, FOG, P, M, WPN, NET, PREP, PROFILE, SHEEP, houses, panels, glasses, pools, PORTALS, TRAMPS, camera, renderer, startGame, chooseDevice, killMonster, respawnMonster, hurtPlayer, destroyPanel, collapseHouse, shakePalm, explodeSheep, switchWeapon, enterPC, exitPC, PC, teleport, toggleRefugeLock, setState: (s) => { gameState = s; }, keys, sheepMatrices, CHAT, openChat, onChatMessage, translate, allPlayers, get ballCount() { return ballCount; }, DESTR, JET, spawnJetpack, equipJetpack, LAGOONS, SLIDES, BIGB, CARS, LAMP_HEADS, openVersions, PCMENU, groundAt, floors, PALMS, setKills: (n) => { kills = n; }, get kills() { return kills; } };
+if (DEBUG) window.__dbg = { SHOOT, rayHouses, rayBalls, rayShops, step: (n, dt) => { for (let i = 0; i < n; i++) simulate(dt || 0.05, false); }, shoot, traceShot, applyHit, curW, WEAPONS, MODELS, myBeam, refugeDoor, CROWNS, RES, softLights, zoneCur, get bloom() { return bloom; }, finalPass, scene, FOG, P, M, WPN, NET, PREP, PROFILE, SHEEP, houses, panels, glasses, pools, PORTALS, TRAMPS, camera, renderer, startGame, chooseDevice, killMonster, respawnMonster, hurtPlayer, destroyPanel, collapseHouse, shakePalm, explodeSheep, switchWeapon, enterPC, exitPC, PC, teleport, toggleRefugeLock, setState: (s) => { gameState = s; }, keys, sheepMatrices, CHAT, openChat, onChatMessage, translate, allPlayers, get ballCount() { return ballCount; }, DESTR, JET, spawnJetpack, equipJetpack, LAGOONS, SLIDES, BIGB, CARS, LAMP_HEADS, openVersions, PCMENU, groundAt, floors, PALMS, DIVES, SHOPS, LAGOONS_DEF, setKills: (n) => { kills = n; }, get kills() { return kills; } };
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) { try { hot.snapshot(() => ({ kills })); } catch (e) {} }
 
