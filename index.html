@@ -5431,7 +5431,11 @@ function initAudio() {
   const dlp = ctx.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 3200; delay.connect(dlp);
   const delayOut = ctx.createGain(); delayOut.gain.value = 0.45; dlp.connect(delayOut); delayOut.connect(music);
   // musique de base (celle de la première version) : son propre bus, qui s'efface quand un jukebox joue
-  const base = ctx.createGain(); base.gain.value = MUS.paused ? 0 : 1; base.connect(music);
+  const base = ctx.createGain(); base.gain.value = MUS.paused ? 0 : BASE_LVL;
+  // voilée : un filtre doux et un peu plus de réverbération que le reste
+  const baseLP = ctx.createBiquadFilter(); baseLP.type = 'lowpass'; baseLP.frequency.value = 1500; baseLP.Q.value = 0.3;
+  base.connect(baseLP); baseLP.connect(music);
+  const baseVerb = ctx.createGain(); baseVerb.gain.value = 0.7; baseLP.connect(baseVerb); baseVerb.connect(reverb);
   const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
   Object.assign(AU, { master, under, music, weapons, fx, reverb, delay, noise, base, on: true });
   applyVolumes();
@@ -5659,9 +5663,10 @@ function updateAudio() {
 }
 
 /* ---------- musique de base : celle, toute simple, de la première version ----------
-   (des nappes douces, une basse qui pulse et un arpège qui rebondit dans l'écho ;
-   elle s'efface dès qu'un jukebox joue) */
-const BPM = 84, BEAT = 60 / BPM;
+   mais en sourdine : plus lente, voilée, presque un souvenir de musique, pour que le
+   jukebox fasse vraiment la différence. Elle s'efface dès qu'un jukebox joue. */
+const BPM = 66, BEAT = 60 / BPM;
+const BASE_LVL = 0.38; // niveau de la musique de base (le jukebox, lui, joue à plein)
 const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
 const CHORDS = [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59], [46, 50, 53, 57], [48, 52, 55, 60]];
 const BASS = [41, 40, 38, 36, 34, 36];
@@ -5669,20 +5674,24 @@ const ARP = [0, 1, 2, 3, 2, 3, 1, 2];
 const MUS = { nextChord: 0, chordI: 0, nextArp: 0, arpI: 0, timer: null, paused: false };
 function playChord(i, t) {
   const ctx = AU.ctx, dur = BEAT * 4;
-  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(700, t); f.frequency.linearRampToValueAtTime(1500, t + dur * 0.6); f.frequency.linearRampToValueAtTime(900, t + dur + 1.5); f.Q.value = 0.8;
-  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.11, t + 1.1); g.gain.setValueAtTime(0.11, t + dur - 0.2); g.gain.linearRampToValueAtTime(0.0001, t + dur + 1.6);
+  // nappe : filtre plus fermé, montée lente, longue traîne
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(420, t); f.frequency.linearRampToValueAtTime(820, t + dur * 0.6); f.frequency.linearRampToValueAtTime(480, t + dur + 2.2); f.Q.value = 0.5;
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.09, t + 2.2); g.gain.setValueAtTime(0.09, t + dur - 0.4); g.gain.linearRampToValueAtTime(0.0001, t + dur + 2.4);
   f.connect(g); g.connect(AU.base);
-  for (const n of CHORDS[i]) for (const det of [-9, 9]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midi(n); o.detune.value = det; o.connect(f); o.start(t); o.stop(t + dur + 1.7); }
-  const bo = ctx.createOscillator(); bo.type = 'triangle'; bo.frequency.value = midi(BASS[i]);
+  for (const n of CHORDS[i]) for (const det of [-7, 7]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midi(n); o.detune.value = det; o.connect(f); o.start(t); o.stop(t + dur + 2.5); }
+  // basse : une seule note tenue et douce, plus de pulsation
+  const bo = ctx.createOscillator(); bo.type = 'sine'; bo.frequency.value = midi(BASS[i]);
   const bg = ctx.createGain(); bo.connect(bg); bg.connect(AU.base);
-  for (let b = 0; b < 4; b++) { const tb = t + b * BEAT; bg.gain.setValueAtTime(0.0001, tb); bg.gain.exponentialRampToValueAtTime(0.16, tb + 0.04); bg.gain.exponentialRampToValueAtTime(0.03, tb + BEAT * 0.9); }
-  bo.start(t); bo.stop(t + dur + 0.1);
+  bg.gain.setValueAtTime(0.0001, t); bg.gain.linearRampToValueAtTime(0.07, t + 1.4); bg.gain.setValueAtTime(0.07, t + dur - 0.5); bg.gain.linearRampToValueAtTime(0.0001, t + dur + 1.2);
+  bo.start(t); bo.stop(t + dur + 1.3);
 }
 function playArp(i, t) {
+  // arpège clairsemé : une note sur deux, et encore pas toujours, très douce, qui se perd dans l'écho
+  if (i % 2 || Math.random() < 0.35) return;
   const ch = CHORDS[Math.floor(i / 8) % CHORDS.length], n = ch[ARP[i % 8]] + 12;
-  const ctx = AU.ctx, o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = midi(n);
-  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-  o.connect(g); g.connect(AU.base); g.connect(AU.delay); o.start(t); o.stop(t + 0.45);
+  const ctx = AU.ctx, o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = midi(n);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.022, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+  o.connect(g); g.connect(AU.base); g.connect(AU.delay); o.start(t); o.stop(t + 1.15);
 }
 // le jukebox remplace la musique de base : on la fait taire en douceur, puis on la reprend
 function setBaseMusic(on) {
@@ -5690,7 +5699,7 @@ function setBaseMusic(on) {
   const t = AU.ctx.currentTime;
   if (on && MUS.paused) { MUS.paused = false; MUS.nextChord = MUS.nextArp = t + 0.6; MUS.arpI = MUS.chordI * 8; }
   else if (!on) MUS.paused = true;
-  AU.base.gain.cancelScheduledValues(t); AU.base.gain.setTargetAtTime(on ? 1 : 0, t, on ? 1.2 : 0.45);
+  AU.base.gain.cancelScheduledValues(t); AU.base.gain.setTargetAtTime(on ? BASE_LVL : 0, t, on ? 1.6 : 0.45);
 }
 function startMusic() {
   const ctx = AU.ctx; MUS.nextChord = MUS.nextArp = ctx.currentTime + 0.2;
