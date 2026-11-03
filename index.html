@@ -534,7 +534,7 @@ body.mobile .disque .v-touche,body.mobile .juke-stop .v-touche{display:none}
   <div class="versions-fenetre juke-fenetre">
     <div class="versions-barre juke-barre"><span>JUKEBOX DU LOTISSEMENT</span><span class="juke-leds" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
     <h2 id="jukeTitre">Six versions d'un même air</h2>
-    <p class="juke-info">Tous les jukebox du quartier sont reliés : le disque que tu choisis joue partout, dans les maisons et dans les haut-parleurs dehors, et n'importe quel jukebox peut l'arrêter.</p>
+    <p class="juke-info">Tous les jukebox du quartier sont reliés : le disque que tu choisis joue partout, dans les maisons et dans les haut-parleurs dehors, et n'importe quel jukebox peut l'arrêter. Quand un morceau se termine, le jukebox en tire un autre au hasard.</p>
     <p class="juke-encours" id="jukeEnCours"></p>
     <div class="juke-liste" id="jukeListe"></div>
     <div class="juke-actions"><button class="juke-stop" id="jukeStop" type="button"><span aria-hidden="true">■</span> Arrêter la musique <span class="v-touche">0</span></button></div>
@@ -4039,7 +4039,9 @@ for (const [id, th, col] of [['lagon-est', 0.55, '#ffd2b4'], ['lagon-couchant', 
 function jukeInitAudio() {
   if (JUKE.el || !AU.ctx) return;
   const ctx = AU.ctx, el = new Audio();
-  el.preload = 'none'; el.loop = true; el.setAttribute('playsinline', '');
+  el.preload = 'none'; el.loop = false; el.setAttribute('playsinline', '');
+  // fin d'un morceau : le jukebox en tire un autre au hasard (aussi quand l'onglet est en arrière-plan)
+  el.addEventListener('ended', () => { if (el.src.startsWith('data:')) return; if (!jukeTick()) setTimeout(jukeTick, Math.max(50, (jukeDur() - jukePos()) * 1000 + 60)); });
   JUKE.el = el;
   // déverrouille la lecture pendant le geste qui lance le jeu (nécessaire sur iPhone et iPad)
   el.src = SILENCE;
@@ -4061,8 +4063,27 @@ function jukeInitAudio() {
   if (JUKE.cur) jukeStart(JUKE.cur);
 }
 function jukeApplyVolume() { if (JUKE.bus && AU.ctx) JUKE.bus.gain.setTargetAtTime(VOL.coupeMusique ? 0 : VOL.musique * JK, AU.ctx.currentTime, 0.2); }
-function jukeDur() { const el = JUKE.el; return el && isFinite(el.duration) && el.duration > 5 ? el.duration : JUKE.cur ? TRACKS[JUKE.cur - 1].dur : 200; }
-function jukePos() { return JUKE.cur ? (((performance.now() - JUKE.t0) / 1000) % jukeDur() + jukeDur()) % jukeDur() : 0; }
+// durées fixes (les mêmes pour tout le monde) : c'est l'horloge commune qui décide quand on change de morceau
+function jukeDur() { return JUKE.cur ? TRACKS[JUKE.cur - 1].dur : 200; }
+function jukePos() { return JUKE.cur ? Math.max(0, (performance.now() - JUKE.t0) / 1000) : 0; }
+// tirage au hasard, mais identique chez tous les rêveurs : même graine, même rang, même morceau précédent
+function jukeNext(seed, k, prev) {
+  const r = rng((seed | 0) * 7919 + k * 104729 + 13)(), others = [];
+  for (let i = 1; i <= TRACKS.length; i++) if (i !== prev) others.push(i);
+  return others[Math.min(others.length - 1, Math.floor(r * others.length))];
+}
+// passe au morceau suivant quand le précédent est fini ; renvoie vrai si on a changé
+function jukeTick() {
+  if (!JUKE.cur) return false;
+  let n = 0;
+  while (JUKE.cur && jukePos() >= jukeDur() && n < 50) { JUKE.t0 += jukeDur() * 1000; JUKE.k++; JUKE.cur = jukeNext(JUKE.seed, JUKE.k, JUKE.cur); n++; }
+  if (!n) return false;
+  jlog('suivant ' + JUKE.cur + ' k ' + JUKE.k);
+  drawJukeDisplay(); jukeMenuRefresh();
+  if (gameState === 'jeu') toast('Jukebox : au tour de "' + TRACKS[JUKE.cur - 1].titre + '"');
+  if (JUKE.el) jukeStart(JUKE.cur);
+  return true;
+}
 function jukeFade(v, tau) { if (!JUKE.fade) return; const t = AU.ctx.currentTime; JUKE.fade.gain.cancelScheduledValues(t); JUKE.fade.gain.setTargetAtTime(v, t, tau); }
 function jukeTryPlay() {
   const el = JUKE.el; if (!el || !JUKE.cur) return;
@@ -4080,13 +4101,15 @@ function jukeStart(i) {
     if (JUKE.cur !== i) return;
     const go = () => { el.removeEventListener('loadedmetadata', go); if (JUKE.cur !== i) return; try { el.currentTime = jukePos(); } catch (e) {} jukeTryPlay(); };
     el.addEventListener('loadedmetadata', go);
-    el.preload = 'auto'; el.loop = true; el.src = TRACKS[i - 1].f; el.load();
+    el.preload = 'auto'; el.loop = false; el.src = TRACKS[i - 1].f; el.load();
   }, 160);
 }
 // i : 1 à 6 ; pos : où en est le disque (secondes) ; from : qui l'a lancé
-function jukePlay(i, pos, from, quiet) {
+// seed, k : graine et rang du tirage au hasard des morceaux suivants (partagés en multijoueur)
+function jukePlay(i, pos, from, quiet, seed, k) {
   i = i | 0; jlog('play ' + i + ' from ' + from + ' el ' + !!JUKE.el); if (i < 1 || i > TRACKS.length) { jukeStop(from, quiet); return; }
   JUKE.cur = i; JUKE.t0 = performance.now() - Math.max(0, pos || 0) * 1000; JUKE.from = from || '';
+  JUKE.seed = seed === undefined ? (Math.random() * 1e9) | 0 : seed | 0; JUKE.k = k | 0;
   setBaseMusic(false); drawJukeDisplay(); jukeMenuRefresh();
   if (!quiet) toast(from && from !== NET.selfId && from !== 'moi' ? NET.nameOf(from) + ' a mis "' + TRACKS[i - 1].titre + '" sur le jukebox' : 'Jukebox : "' + TRACKS[i - 1].titre + '"');
   if (JUKE.el) jukeStart(i);
@@ -4103,21 +4126,21 @@ function jukeStop(from, quiet, local) {
 function jukeChoose(i) {
   if (i) jukePlay(i, 0, NET.selfId, false); else jukeStop(NET.selfId, false);
   sJukeKey(i);
-  if (NET.on) NET.send('juke', { i: i | 0, p: 0, j: JUKE.at ? JUKE.at.i : -1 });
+  if (NET.on) NET.send('juke', { i: i | 0, p: 0, j: JUKE.at ? JUKE.at.i : -1, r: JUKE.seed | 0, k: 0 });
 }
-function jukeNetState() { return JUKE.cur ? { i: JUKE.cur, p: Math.round(jukePos() * 100) / 100 } : 0; }
+function jukeNetState() { return JUKE.cur ? { i: JUKE.cur, p: Math.round(jukePos() * 100) / 100, r: JUKE.seed | 0, k: JUKE.k | 0 } : 0; }
 function jukeOnNet(d, from) {
   if (!d) return;
   const i = d.i | 0;
   if (d.s) { jukeFromState(d); return; } // simple mise à l'heure pour quelqu'un qui arrive
-  if (i >= 1 && i <= TRACKS.length) jukePlay(i, (+d.p || 0) + 0.12, from, false); else jukeStop(from, false);
+  if (i >= 1 && i <= TRACKS.length) jukePlay(i, (+d.p || 0) + 0.12, from, false, d.r | 0, d.k | 0); else jukeStop(from, false);
 }
 // un rêveur arrive : ceux qui écoutent un disque lui disent lequel, et où on en est
-function jukeGreet(id) { if (JUKE.cur && NET.on) NET.send('juke', { i: JUKE.cur, p: Math.round(jukePos() * 100) / 100, s: 1 }, id); }
+function jukeGreet(id) { if (JUKE.cur && NET.on) NET.send('juke', Object.assign(jukeNetState(), { s: 1 }), id); }
 function jukeFromState(s) {
   jlog('state ' + JSON.stringify(s));
   // on ne coupe jamais la musique de quelqu'un à cause d'un état reçu : on ne fait que rejoindre un disque en cours
-  if (s && (s.i | 0) >= 1 && (s.i | 0) <= TRACKS.length) { if (JUKE.cur !== (s.i | 0)) jukePlay(s.i | 0, (+s.p || 0) + 0.25, 'net', true); else JUKE.t0 = performance.now() - ((+s.p || 0) + 0.25) * 1000; }
+  if (s && (s.i | 0) >= 1 && (s.i | 0) <= TRACKS.length) { if (JUKE.cur !== (s.i | 0)) jukePlay(s.i | 0, (+s.p || 0) + 0.25, 'net', true, s.r | 0, s.k | 0); else { JUKE.t0 = performance.now() - ((+s.p || 0) + 0.25) * 1000; JUKE.seed = s.r | 0; JUKE.k = s.k | 0; } }
 }
 // si le navigateur a refusé de lancer la lecture (disque mis par quelqu'un d'autre), le prochain geste la relance
 for (const ev of ['pointerdown', 'keydown', 'touchend']) addEventListener(ev, () => { if (JUKE.blocked && JUKE.cur) jukeTryPlay(); }, { passive: true });
@@ -4172,13 +4195,13 @@ function updateJukeAudio(dt) {
   if (JUKE.syncT <= 0 && JUKE.el && !JUKE.el.paused && JUKE.el.readyState >= 3 && !JUKE.el.seeking && !JUKE.el.src.startsWith('data:')) {
     JUKE.syncT = 2;
     const want = jukePos(), cur = JUKE.el.currentTime, dur = jukeDur();
-    let diff = Math.abs(cur - want); diff = Math.min(diff, dur - diff);
-    if (diff > 0.9) try { JUKE.el.currentTime = want; } catch (e) {}
+    if (want < dur - 1 && Math.abs(cur - want) > 0.9) try { JUKE.el.currentTime = want; } catch (e) {}
   }
 }
 /* ---------- animation : disque qui tourne, néons, LED, haut-parleurs qui pompent ---------- */
 const _jm = new THREE.Matrix4(), _js = new THREE.Matrix4();
 function updateJukebox(dt) {
+  jukeTick();
   const on = JUKE.cur ? 1 : 0;
   JUKE.on = damp(JUKE.on, on, on ? 3 : 1.5, dt);
   JUKE.hit = Math.max(0, JUKE.hit - dt * 2.5);
