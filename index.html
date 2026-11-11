@@ -1480,7 +1480,10 @@ const T = {};
 function neonTex(text, color, w, h, font) {
   const [c, g] = makeCanvas(w, h);
   g.clearRect(0, 0, w, h);
-  g.font = font || ('bold ' + Math.floor(h * 0.62) + 'px "Brush Script MT","Segoe Script","Comic Sans MS",cursive');
+  const ff = '"Brush Script MT","Segoe Script","Comic Sans MS",cursive'; let fs = Math.floor(h * 0.62);
+  g.font = font || ('bold ' + fs + 'px ' + ff);
+  // un texte trop long est réduit pour tenir dans l'enseigne
+  if (!font) { const mw = g.measureText(text).width; if (mw > w * 0.9) { fs = Math.floor(fs * w * 0.9 / mw); g.font = 'bold ' + fs + 'px ' + ff; } }
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.shadowColor = color; g.shadowBlur = h * 0.18; g.lineWidth = h * 0.07; g.strokeStyle = color; g.lineJoin = 'round';
   g.strokeText(text, w / 2, h / 2);
@@ -4713,7 +4716,7 @@ function stand(nom, zc, side, titre, c1, c2, signCol) {
   B.add(boxG(w + 0.5, 0.14, L + 0.3), pale, M4(mx, DECK + H + 0.07, zc), true, true);
   B.add(boxG(1.7, 0.05, L + 0.4), aw, M4(xf - side * 0.75, DECK + H - 0.22, zc, 0, 0, -side * 0.34), true, true);
   B.add(boxG(0.1, 1.15, L - 0.2), colorMat('#2e1f4a'), M4(xf + side * 0.12, DECK + H + 0.72, zc));
-  kitSign(titre, signCol, xf + side * 0.05, DECK + H + 0.72, zc, -side * PI / 2, L - 0.6, 0.95, 2.8);
+  kitSign(titre, signCol, xf + side * 0.05, DECK + H + 0.72, zc, -side * PI / 2, L - 0.6, 0.95, 1.7);
   bulbString(xf - side * 0.1, DECK + H + 1.42, zc - L / 2, xf - side * 0.1, DECK + H + 1.42, zc + L / 2, 11, 0, zc | 0);
   addBox(xb, zc, 0.12, L / 2, 0, DECK, H + 0.4); addBox(xf, zc, 0.3, L / 2, 0, DECK, 1.08);
   addSoft(mx, 2.35, zc, '#ffe2b0', 1.5, 6.5);
@@ -4750,7 +4753,7 @@ stand('guichet', -62, 1, 'GUICHET DES RECORDS', '#ffe68f', '#a9e3cb', '#ffd27a')
     B.add(new THREE.SphereGeometry(0.26, 14, 10), colorMat('#f3d9c4'), M4(s.mx - 0.5, DECK + 1.72, s.z));
     B.add(new THREE.SphereGeometry(0.3, 14, 10), colorMat('#ff8fcf'), M4(s.mx - 0.5, DECK + 1.92, s.z, 0, 0, 0, 1.05, 0.62, 1.05));
     B.add(cylG(0.2, 0.26, 0.12, 14), MAT.gold, M4(s.x, DECK + 1.12, s.z));
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 14), new THREE.MeshBasicMaterial({ color: HDR('#b98cff', 1.2) }));
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 14), new THREE.MeshBasicMaterial({ color: HDR('#b98cff', 0.8) }));
     ball.position.set(s.x, DECK + 1.42, s.z); world.add(ball); FRONT.crystal = ball;
     FRONT.crystalL = addSoft(s.x, DECK + 1.5, s.z, '#b98cff', 1.6, 5); }
 })();
@@ -4824,7 +4827,7 @@ function updateFront(dt) {
   FRONT.t += dt;
   const n = NIGHT.value;
   if (FRONT.beam) { FRONT.beam.rotation.y = FRONT.t * 0.42; FRONT.beam.visible = n > 0.05; FRONT.beamMat.opacity = 0.1 * n; FRONT.lantern.material.color.setScalar(0.6 + 2.6 * n).multiply(_fc); }
-  if (FRONT.crystal) { const k = 1 + 0.35 * Math.sin(FRONT.t * 2.3) + (FRONT.glow || 0) * 3; FRONT.crystal.material.color.set('#b98cff').multiplyScalar(k); FRONT.crystalL.k = FRONT.crystalL.base * k; FRONT.glow = Math.max(0, (FRONT.glow || 0) - dt * 0.6); }
+  if (FRONT.crystal) { const k = 1 + 0.35 * Math.sin(FRONT.t * 2.3) + (FRONT.glow || 0) * 3; FRONT.crystal.material.color.set('#b98cff').multiplyScalar(k * 0.62); FRONT.crystalL.k = FRONT.crystalL.base * k; FRONT.glow = Math.max(0, (FRONT.glow || 0) - dt * 0.6); }
   // jets de la fontaine quand on est sur la place
   const dx = camera.position.x, dz = camera.position.z - 24;
   if (dx * dx + dz * dz < 2500) {
@@ -5242,6 +5245,10 @@ function totem(x, z, text, col) {
   B.add(boxG(0.16, 2.5, 0.16), MAT.white, M4(x, 1.25, z), true, true); B.add(boxG(2.7, 0.62, 0.1), colorMat('#2e1f4a'), M4(x, 2.8, z), true, true); addCircle(x, z, 0.14, 0, 2.5);
   kitSign(text, col, x, 2.8, z + 0.07, 0, 2.5, 0.5, 2.6); kitSign(text, col, x, 2.8, z - 0.07, PI, 2.5, 0.5, 2.6);
 }
+function fleche(x, z, nom) {
+  B.add(boxG(0.16, 2.5, 0.16), MAT.white, M4(x, 1.25, z), true, true); B.add(boxG(4.0, 0.62, 0.1), colorMat('#2e1f4a'), M4(x, 2.8, z), true, true); addCircle(x, z, 0.14, 0, 2.5);
+  kitSign('← ' + nom, '#a3f3dc', x, 2.8, z + 0.07, 0, 3.8, 0.5, 2.6); kitSign(nom + ' →', '#a3f3dc', x, 2.8, z - 0.07, PI, 3.8, 0.5, 2.6);
+}
 function base(x, z, w, d) { const m = new THREE.Mesh(flatG(w, d), new THREE.MeshBasicMaterial({ color: C('#241a3e'), polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); m.position.set(x, 0.035, z); world.add(m); }
 
 const SIMON = { id: 'simon', nom: 'PISTE SIMON', unit: 'manches', aide: 'regarde la suite, puis marche sur les dalles dans le même ordre', x: -30, z: 8, r: 4.6, tiles: [], seq: [], st: '', k: 0, w: 0, last: -1, air: false,
@@ -5289,6 +5296,7 @@ const PIANO = { keys: [], last: -1, hist: [], done: false, x0: 26.2, z0: 8.1, no
   base(30, 9.5, 8.0, 3.2);
   for (let i = 0; i < 8; i++) { const m = pad(flatG(0.88, 2.8), PIANO.x0 + 0.475 + i * 0.95, 9.5, PASTELS[i]); m.userData.c = C('#fff5fa'); m.userData.tint = C(PASTELS[i]); PIANO.keys.push(m); }
   totem(30, 12.2, 'PIANO GÉANT', '#ffd27a');
+  fleche(-18.5, 12.7, 'VILLA-REFUGE'); fleche(-63, 9.8, 'VILLA-REFUGE');
 })();
 function updatePads(dt) {
   for (const m of SIMON.tiles) padFade(m, dt);
@@ -5451,7 +5459,7 @@ const FWCOLS = ['#ff8fcf', '#7ff0ff', '#ffd27a', '#b98cff', '#a3f3dc', '#ffb07a'
       '  vec3 p = aP0 + aV * (1.0 - exp(-' + FW.D.toFixed(1) + ' * age)) / ' + FW.D.toFixed(1) + '; p.y -= 2.0 * age * age;',
       '  vA = (age < 0.0 || age > aT.y) ? 0.0 : (1.0 - k * k * k) * (0.7 + 0.3 * sin(age * 38.0 + aP0.x * 13.0 + aV.y));',
       '  vC = aC; vec4 mv = viewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;',
-      '  gl_PointSize = vA > 0.0 ? max(1.6, aT.z * uPx / max(1.0, -mv.z)) : 0.0;',
+      '  gl_PointSize = vA > 0.0 ? max(2.0, aT.z * 1.5 * uPx / max(1.0, -mv.z)) : 0.0;',
       '}'].join('\n'),
     fragmentShader: 'varying vec3 vC; varying float vA; void main() { vec2 q = gl_PointCoord - 0.5; float r = dot(q, q) * 4.0; if (r > 1.0 || vA <= 0.0) discard; float f = (1.0 - r); gl_FragColor = vec4(vC * vA * f * f * 1.6, 1.0); }',
   });
@@ -5467,19 +5475,19 @@ function fwLaunch(x, y0, z, h, delay, type) {
   for (let j = 1; j < 10; j++) { const tj = tau * j / 10; fwEmit(x, y0 + vy * (1 - Math.exp(-D * tj)) / D - 2 * tj * tj, z, rnd(-0.6, 0.6), -1.5, rnd(-0.6, 0.6), t0 + tj, 0.7, 0.8, FWCOLS[2]); }
   FW.q.push({ t: t0 + tau, x, y: y0 + h, z, type: type === undefined ? (Math.random() * 5) | 0 : type, c });
 }
-function fwSalvo(n) { for (let i = 0; i < n; i++) fwLaunch(rnd(-60, 60), SEA.surf, rnd(-255, -215), rnd(46, 78), i * rnd(0.25, 0.5)); }
+function fwSalvo(n) { for (let i = 0; i < n; i++) fwLaunch(rnd(-55, 55), SEA.surf, rnd(-205, -172), rnd(50, 82), i * rnd(0.25, 0.5)); }
 const _fa = new V3(), _fb = new V3(), _fd = new V3();
 function fwBurst(b) {
   const t = FW.t, c = b.c, c2 = FWCOLS[(Math.random() * FWCOLS.length) | 0];
   const ball = (n, s0, s1, col, l0, l1, size) => { for (let i = 0; i < n; i++) { _fd.set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)); if (_fd.lengthSq() > 1 || _fd.lengthSq() < 0.01) { i--; continue; } _fd.normalize().multiplyScalar(rnd(s0, s1)); fwEmit(b.x, b.y, b.z, _fd.x, _fd.y, _fd.z, t, rnd(l0, l1), size, col); } };
-  if (b.type === 0) ball(230, 30, 38, c, 1.4, 2.1, 1.5);
+  if (b.type === 0) ball(240, 40, 50, c, 1.5, 2.2, 1.5);
   else if (b.type === 1) {
     _fa.set(rnd(-0.4, 0.4), 1, rnd(-0.4, 0.4)).normalize(); _fb.set(1, 0, 0).cross(_fa).normalize(); _fd.crossVectors(_fa, _fb);
-    for (let i = 0; i < 150; i++) { const a = i / 150 * PI * 2, s = 36; fwEmit(b.x, b.y, b.z, (_fb.x * Math.cos(a) + _fd.x * Math.sin(a)) * s, (_fb.y * Math.cos(a) + _fd.y * Math.sin(a)) * s, (_fb.z * Math.cos(a) + _fd.z * Math.sin(a)) * s, t, rnd(1.5, 1.9), 1.6, c); }
-    ball(60, 8, 14, c2, 1.0, 1.5, 1.3);
-  } else if (b.type === 2) { ball(150, 34, 39, c, 1.5, 2.0, 1.5); ball(90, 16, 20, c2, 1.3, 1.8, 1.4); }
-  else if (b.type === 3) ball(210, 14, 30, FWCOLS[2], 2.6, 3.6, 1.3);
-  else for (let i = 0; i < 170; i++) { const a = i / 170 * PI * 2, s = 2.3 * rnd(0.96, 1.04), hx = 16 * Math.pow(Math.sin(a), 3), hy = 13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a); fwEmit(b.x, b.y, b.z, hx * s, hy * s, rnd(-1, 1), t, rnd(1.7, 2.1), 1.6, FWCOLS[0]); }
+    for (let i = 0; i < 150; i++) { const a = i / 150 * PI * 2, s = 48; fwEmit(b.x, b.y, b.z, (_fb.x * Math.cos(a) + _fd.x * Math.sin(a)) * s, (_fb.y * Math.cos(a) + _fd.y * Math.sin(a)) * s, (_fb.z * Math.cos(a) + _fd.z * Math.sin(a)) * s, t, rnd(1.5, 1.9), 1.6, c); }
+    ball(60, 10, 18, c2, 1.0, 1.5, 1.3);
+  } else if (b.type === 2) { ball(150, 44, 52, c, 1.6, 2.1, 1.5); ball(90, 20, 26, c2, 1.3, 1.8, 1.4); }
+  else if (b.type === 3) ball(220, 18, 40, FWCOLS[2], 2.6, 3.6, 1.3);
+  else for (let i = 0; i < 170; i++) { const a = i / 170 * PI * 2, s = 3.0 * rnd(0.96, 1.04), hx = 16 * Math.pow(Math.sin(a), 3), hy = 13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a); fwEmit(b.x, b.y, b.z, hx * s, hy * s, rnd(-1, 1), t, rnd(1.7, 2.1), 1.6, FWCOLS[0]); }
   const fw = seaMat.uniforms.uFW.value; fw.x += c.r * 0.22; fw.y += c.g * 0.22; fw.z += c.b * 0.22;
   if (AU.on) { const d = camera.position.distanceTo(_fa.set(b.x, b.y, b.z)), v = clamp(70 / d, 0.12, 0.9), tt = now() + d / 340;
     noiseHit(AU.fx, tt, 1.2, 'lowpass', 520, 45, v); tone(AU.fx, tt, 'sine', 90, 38, 0.5, v * 0.7); noiseHit(AU.fx, tt + 0.3, 0.8, 'highpass', 3800, 2600, v * 0.16); }
@@ -5490,7 +5498,7 @@ function updateFireworks(dt) {
   const n = NIGHT.value;
   if (FW.was < 0.92 && n >= 0.92 && gameState === 'jeu') { FW.show = 42; FW.next = 1.5; toast('La nuit tombe : le feu d’artifice commence au large'); }
   FW.was = n;
-  if (FW.show > 0) { FW.show -= dt; FW.next -= dt; if (FW.next <= 0) { FW.next = FW.show < 7 ? rnd(0.12, 0.3) : rnd(0.5, 1.3); fwLaunch(rnd(-75, 75), SEA.surf, rnd(-260, -215), rnd(46, 80), 0); } }
+  if (FW.show > 0) { FW.show -= dt; FW.next -= dt; if (FW.next <= 0) { FW.next = FW.show < 7 ? rnd(0.12, 0.3) : rnd(0.5, 1.3); fwLaunch(rnd(-70, 70), SEA.surf, rnd(-210, -172), rnd(50, 84), 0); } }
   for (let i = FW.q.length - 1; i >= 0; i--) if (FW.q[i].t <= FW.t) { fwBurst(FW.q[i]); FW.q.splice(i, 1); }
   if (FW.dirty) { FW.dirty = false; FW.p0.needsUpdate = FW.v.needsUpdate = FW.tt.needsUpdate = FW.c.needsUpdate = true; }
   FW.mat.uniforms.uTime.value = FW.t; FW.mat.uniforms.uPx.value = renderer.domElement.height / (2 * Math.tan(camera.fov * PI / 360));
