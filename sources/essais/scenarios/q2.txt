@@ -1,0 +1,2 @@
+d.P.pos.set(-116, 7.05, -34); d.step(5, 0.03);
+return JSON.stringify({ th: [d.TH(-116,-34), d.TH(-120,-30), d.TH(-110,-34), d.TH(-130,-16)].map(v=>+v.toFixed(2)), pos: d.P.pos.toArray().map(v=>+v.toFixed(2)), g: +d.groundAt(-116,-34,20).toFixed(2), hill: 1 })

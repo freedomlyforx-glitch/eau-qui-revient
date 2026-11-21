@@ -1,0 +1,5 @@
+return JSON.stringify({ pos: d.P.pos.toArray().map(v=>+v.toFixed(2)), th: d.TH(0,9), sea: d.SEA.surf, t: d.TIME.t, night: d.NIGHT.value, bulbs: d.BULBS.list.length, acts: d.ACT.list.length })
+---
+wait 1500
+---
+shot v3_boot

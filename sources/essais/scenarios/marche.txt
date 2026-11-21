@@ -1,0 +1,12 @@
+const P = d.P, out = {};
+const walk = (x, y, z, yaw, secs) => { P.pos.set(x, y, z); P.vel.set(0, 0, 0); P.yaw = yaw; P.pitch = 0; d.step(3, 0.02); d.keys.KeyW = true; d.step(Math.round(secs / 0.02), 0.02); d.keys.KeyW = false; d.step(5, 0.02); return [+P.pos.x.toFixed(1), +P.pos.y.toFixed(2), +P.pos.z.toFixed(1), P.swim ? 'nage' : '']; };
+out.jetee = walk(0, 0, 9, 0, 12);
+out.escalier = walk(24, 0, 3, 0, 5);
+out.digue = walk(30, d.TH(30, -10), -10, Math.PI, 5);
+out.rambarde = walk(40, 0, 6, 0, 3);
+out.rampe = walk(-62, 0, 4, Math.PI / 2, 10);
+out.mer = walk(40, d.TH(40, -30), -30, 0, 6);
+out.porte = walk(-116, 7.3, -0.4, Math.PI / 2, 2.5);
+out.falaise = walk(-100, d.TH(-100, -30), -30, Math.PI / 2, 4);
+out.thFal = [-100, -104, -108, -112].map((x) => +d.TH(x, -30).toFixed(1));
+return JSON.stringify(out)

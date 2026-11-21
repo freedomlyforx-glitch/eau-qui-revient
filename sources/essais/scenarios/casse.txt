@@ -1,0 +1,12 @@
+const P = d.P, out = {}; const V = d.camera.position.constructor;
+out.n = [d.KW.walls.length, d.KW.panes.length, d.panels.length];
+// mur sud de la villa, vu de la terrasse
+const shoot = (ox, oy, oz, tx, ty, tz, n) => { const o = new V(ox, oy, oz), dir = new V(tx - ox, ty - oy, tz - oz).normalize(); let r = null; for (let i = 0; i < n; i++) { r = d.traceShot(o, dir, 80); if (!r.kind) break; d.applyHit(r, dir, d.curW(), 1, false); } return r ? r.kind : null; };
+const w = d.KW.walls.find((q) => Math.abs(q.z + 14) < 0.2 && q.y > 7.5 && q.hy > 1); out.w = [+w.x.toFixed(1), +w.y.toFixed(1), +w.z.toFixed(1), w.hp];
+out.k1 = shoot(w.x, w.y, w.z - 6, w.x, w.y, w.z, 1); out.hp1 = w.hp; out.k2 = shoot(w.x, w.y, w.z - 6, w.x, w.y, w.z, 12); out.alive = w.alive; out.col = w.col.on;
+const p = d.KW.panes[0]; out.p = [+p.x.toFixed(1), +p.y.toFixed(1), +p.z.toFixed(1)]; out.k3 = shoot(p.x, p.y, p.z - 5, p.x, p.y, p.z, 1); out.pAlive = p.alive;
+// une maison de la rue
+const hp = d.panels.find((q) => q.type === 'mur'); const nx = Math.sin(hp.ang), nz = Math.cos(hp.ang);
+out.k4 = shoot(hp.x + nx * 5, hp.y + 1.6, hp.z + nz * 5, hp.x, hp.y + 1.6, hp.z, 1); out.hhp = hp.hp; out.k5 = shoot(hp.x + nx * 5, hp.y + 1.6, hp.z + nz * 5, hp.x, hp.y + 1.6, hp.z, 14); out.hAlive = hp.alive;
+d.step(700, 0.05); out.rebuilt = [w.alive, p.alive, hp.alive];
+return JSON.stringify(out)

@@ -1,0 +1,8 @@
+const P = d.P, out = {}; const rd = d.refugeDoor;
+out.locked = rd.locked; out.doors = rd.doors.map((q) => [q.cx, q.cz, +(q.open || 0).toFixed(2)]);
+P.pos.set(-116, 7.3, -0.4); P.vel.set(0, 0, 0); P.yaw = Math.PI / 2; d.step(60, 0.02);
+out.open1 = rd.doors.map((q) => +(q.open || 0).toFixed(2)); out.keys = Object.keys(rd.doors[0]).join(',');
+d.keys.KeyW = true; d.step(200, 0.02); d.keys.KeyW = false; out.pos = [+P.pos.x.toFixed(1), +P.pos.y.toFixed(2), +P.pos.z.toFixed(1)];
+out.open2 = rd.doors.map((q) => +(q.open || 0).toFixed(2));
+P.pos.set(-134.1, 7.3, -17.5); P.vel.set(0, 0, 0); P.yaw = Math.PI; d.step(30, 0.02); d.keys.KeyW = true; d.step(150, 0.02); d.keys.KeyW = false; out.pos2 = [+P.pos.x.toFixed(1), +P.pos.y.toFixed(2), +P.pos.z.toFixed(1)];
+return JSON.stringify(out)

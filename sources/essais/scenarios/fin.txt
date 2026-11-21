@@ -1,0 +1,1 @@
+d.step(400, 0.05); d.setTimeOfDay(365); d.step(400, 0.05); d.setTimeOfDay(585); d.step(300, 0.05); return JSON.stringify({ t: Math.round(d.TIME.t), n: +d.NIGHT.value.toFixed(2), m: d.M.state, surf: +d.SEA.surf.toFixed(2), fw: d.FW.i })

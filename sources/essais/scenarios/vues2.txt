@@ -1,0 +1,23 @@
+const look = (ax, ay, az, bx, by, bz) => { d.P.pos.set(ax, ay, az); d.P.yaw = Math.atan2(-(bx - ax), -(bz - az)); d.P.pitch = Math.atan2(by - ay - 1.6, Math.hypot(bx - ax, bz - az)); }; window.__look = look; d.setTimeOfDay(150); look(-116, 7.05, -34, -133, 9, -8);
+---
+wait 1500
+---
+shot v3_e
+---
+window.__look(-141.5, 7.3, -4, -142.5, 8.6, 1.4);
+---
+wait 1200
+---
+shot v3_f
+---
+window.__look(30, d.TH(30, -20), -20, -10, 0, -70);
+---
+wait 1200
+---
+shot v3_g
+---
+d.setTimeOfDay(430); window.__look(12, 0.03, -121, -8, 9, -146);
+---
+wait 1500
+---
+shot v3_h

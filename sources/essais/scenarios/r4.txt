@@ -1,0 +1,23 @@
+d.setTimeOfDay(215); d.setState('apercu'); const cam = (x, y, z, tx, ty, tz) => { d.camera.position.set(x, y, z); d.camera.lookAt(tx, ty, tz); }; window.__cam = cam; cam(-22, d.TH(-22, -30) + 1.6, -30, 30, 4, -150);
+---
+wait 1500
+---
+shot r_a
+---
+window.__cam(-62, 2.1, 4.5, -100, 7.5, 4);
+---
+wait 1200
+---
+shot r_g
+---
+window.__cam(-96, 9, 9, -70, 0, 2);
+---
+wait 1200
+---
+shot r_h
+---
+d.setTimeOfDay(330); window.__cam(3, 1.7, -8, -3, 3.4, -60);
+---
+wait 1500
+---
+shot r_i

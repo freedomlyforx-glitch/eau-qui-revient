@@ -1,0 +1,6 @@
+const P = d.P, out = {};
+P.pos.set(-133.5, 7.3, -17.5); P.vel.set(0, 0, 0); P.yaw = Math.PI; d.step(30, 0.02); d.keys.KeyW = true; d.step(150, 0.02); d.keys.KeyW = false; out.pos2 = [+P.pos.x.toFixed(1), +P.pos.y.toFixed(2), +P.pos.z.toFixed(1)];
+// escalier du toit : on cherche les marches et on vérifie qu'on peut monter
+out.toit = +d.groundAt(-133, -6, 20).toFixed(2); out.sol = +d.groundAt(-133, -6, 7.5).toFixed(2);
+out.piscine = [+d.groundAt(-134, -30, 8).toFixed(2), !!d.poolAt(-134, -30), d.poolAt(-134, -30) && d.poolAt(-134, -30).surf];
+return JSON.stringify(out)

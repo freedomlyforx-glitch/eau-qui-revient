@@ -1,0 +1,11 @@
+d.setTimeOfDay(215); d.setState('apercu'); d.camera.position.set(-112, 26, -44); d.camera.rotation.set(-0.75, 0.6, 0);
+---
+wait 1500
+---
+shot r_e
+---
+d.camera.position.set(-116, 8.65, -34); d.camera.rotation.set(0.0, Math.atan2(17, -26), 0); d.GRASS.mesh.visible = false; window.__ng = 1;
+---
+wait 1200
+---
+shot r_f

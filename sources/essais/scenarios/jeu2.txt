@@ -1,0 +1,36 @@
+const P = d.P, out = {};
+const go = (x, y, z) => { P.pos.set(x, y, z); P.vel.set(0, 0, 0); d.step(3, 0.03); d.updateHint(); return d.hint; };
+go(-2.85, 0.03, -20); d.interact(); d.step(3, 0.03);
+const k = d.DUCKS[1]; const o = d.camera.position.clone().set(-2.8, 1.7, -20); const tgt = k.m.position.clone(); tgt.y += 0.1; const dir = tgt.sub(o).normalize();
+const r = d.traceShot(o, dir, 50); out.kind = r.kind; d.applyHit(r, dir, d.curW(), 1, false); out.sc = d.G_DUCKS.score; d.step(700, 0.05); out.best = JSON.stringify(d.ACT.best);
+// Simon : on rejoue la suite en marchant sur les bonnes dalles
+out.hs = go(-30, 0, 8); d.interact(); let rounds = 0;
+for (let it = 0; it < 4000 && d.ACT.cur === d.SIMON && rounds < 3; it++) {
+  d.step(1, 0.05);
+  if (d.SIMON.st === 'joue') { const want = d.SIMON.seq[d.SIMON.k], t = d.SIMON.tiles[want]; P.pos.set(-30, 0, 8); d.step(1, 0.02); if (d.ACT.cur !== d.SIMON) break; P.pos.set(t.position.x, 0, t.position.z); d.step(1, 0.02); if (d.SIMON.st === 'montre') rounds++; }
+}
+out.simonRounds = rounds; out.simonScore = d.SIMON.score; P.pos.set(-30.0, 0, 8); d.step(200, 0.05); out.simonEnd = d.ACT.cur ? d.ACT.cur.id : null;
+// tape-flaque
+out.hf = go(70, 0, 12.5); d.interact();
+for (let it = 0; it < 20 && d.ACT.cur === d.FLAQ; it++) { d.step(2, 0.05); const p = d.FLAQ.pads[d.FLAQ.cur]; if (p) { P.pos.set(p.position.x, 0, p.position.z); d.step(1, 0.03); } }
+out.flaq = d.FLAQ.score; d.step(700, 0.05); out.flaqEnd = d.ACT.cur ? d.ACT.cur.id : null;
+// piano : Frère Jacques
+const t0 = d.ACT.tickets; for (const n of [0, 1, 2, 0, 0, 1, 2, 0]) { P.pos.set(20, 0, 9.5); d.step(1, 0.03); P.pos.set(26.2 + 0.475 + n * 0.95, 0, 9.5); d.step(1, 0.03); }
+out.piano = d.ACT.tickets - t0; out.tk = d.ACT.tickets;
+return JSON.stringify(out)
+---
+const P = d.P, out = {};
+const go = (x, y, z) => { P.pos.set(x, y, z); P.vel.set(0, 0, 0); d.step(3, 0.03); d.updateHint(); return d.hint; };
+out.hp = go(25.3, 0.03, -140); d.interact(); out.st = d.FISH.st;
+for (let i = 0; i < 400 && d.FISH.st === 'attente'; i++) d.step(1, 0.05);
+out.st2 = d.FISH.st; d.interact(); out.st3 = d.FISH.st; out.carnet = d.ACT.best.carnet; out.tk = d.ACT.tickets;
+out.hm = go(-10, 0.03, -162.1); d.interact(); d.step(60, 0.05); out.fwq = d.FW.q.length; out.tk2 = d.ACT.tickets; d.step(40, 0.05); out.fwi = d.FW.i;
+out.hr = go(0, 0.03, -142); d.interact(); d.step(20, 0.05); out.ride = P.ride && P.ride.k; out.ry = +P.pos.y.toFixed(2); d.step(400, 0.05); out.ry2 = +P.pos.y.toFixed(2); d.updateHint(); out.hint = d.hint; d.interact(); d.step(3, 0.05); out.left = [P.ride, +P.pos.x.toFixed(1), +P.pos.y.toFixed(2), +P.pos.z.toFixed(1)];
+out.hc = go(-16, 0.33, -124.5); d.interact(); d.step(30, 0.05); out.ride2 = P.ride && P.ride.k; out.cy = +P.pos.y.toFixed(2); d.interact(); d.step(3, 0.05); out.left2 = [+P.pos.x.toFixed(1), +P.pos.y.toFixed(2), +P.pos.z.toFixed(1)];
+// coquillages
+const s = d.COQ.list[0]; out.nCoq = d.COQ.list.length; P.pos.set(s.x, s.y, s.z); d.step(2, 0.03); out.coq = d.COQ.got;
+// sieste
+out.hb = go(-123.2, 7.3, -8.6); out.n0 = d.NIGHT.value; d.interact(); d.step(80, 0.05); out.n1 = +d.NIGHT.value.toFixed(2); out.t1 = Math.round(d.TIME.t);
+d.step(200, 0.05); out.fwShow = +d.FW.show.toFixed(1); out.m = d.M.state; d.step(600, 0.05); out.m2 = d.M.state; out.mpos = [Math.round(d.M.pos.x), Math.round(d.M.pos.z)];
+d.togglePhoto(); out.photo = d.PHOTO.on; d.togglePhoto();
+return JSON.stringify(out)

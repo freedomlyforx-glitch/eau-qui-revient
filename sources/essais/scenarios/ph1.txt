@@ -1,0 +1,5 @@
+d.setTimeOfDay(215); d.P.pos.set(-6, 0, 30); d.P.yaw = -2.0; d.P.pitch = 0.02; d.step(3, 0.03); return JSON.stringify({ q: d.PRESETS ? 1 : 0, pr: d.renderer.getPixelRatio(), dpr: window.devicePixelRatio, grass: d.GRASS.level })
+---
+wait 2500
+---
+shot ph_a

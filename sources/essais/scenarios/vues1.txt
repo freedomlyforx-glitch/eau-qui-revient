@@ -1,0 +1,25 @@
+d.P.pos.set(0, 0.03, -60); d.P.yaw = Math.PI; d.P.pitch = 0.05;
+---
+wait 1200
+---
+shot v3_a
+---
+d.setTimeOfDay(345); d.P.pos.set(40, 0, 6); d.P.yaw = 0.9; d.P.pitch = 0.08;
+---
+wait 1500
+---
+shot v3_b
+---
+d.setTimeOfDay(420); d.P.pos.set(-20, 0, 10); d.P.yaw = -0.35; d.P.pitch = 0.12;
+---
+wait 1500
+---
+shot v3_c
+---
+d.setTimeOfDay(200); d.P.pos.set(-133, 7.3, -6); d.P.yaw = 2.2; d.P.pitch = -0.05;
+---
+wait 1500
+---
+shot v3_d
+---
+return JSON.stringify({ m: d.M ? d.M.state : null, fps: 0 })

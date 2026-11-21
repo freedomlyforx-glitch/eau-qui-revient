@@ -1,0 +1,25 @@
+const P = d.P, out = {};
+const go = (x, y, z) => { P.pos.set(x, y, z); P.vel.set(0, 0, 0); d.step(3, 0.03); d.updateHint(); return d.hint; };
+out.g = [[0,9],[0,-50],[0,-140],[24,-2.5],[30,-20],[30,-60],[-133,-6],[-90,4],[0,24]].map(([x,z]) => +d.groundAt(x, z, 20).toFixed(2));
+out.h1 = go(-2.85, 0.03, -20); d.interact(); d.step(5, 0.03);
+out.cur1 = d.ACT.cur && d.ACT.cur.id;
+// tire sur un canard
+const k = d.DUCKS[0]; const o = d.camera.position.clone().set(-2.8, 1.7, -20); const dir = k.m.position.clone().sub(o).normalize();
+const r = d.traceShot(o, dir, 50); out.kind = r.kind; d.applyHit(r, dir, d.curW(), 1, false); out.sc = d.G_DUCKS.score; out.down = +k.down.toFixed(2);
+d.step(700, 0.05); out.after = d.ACT.cur && d.ACT.cur.id; out.tk = d.ACT.tickets; out.best = JSON.stringify(d.ACT.best);
+return JSON.stringify(out)
+---
+const P = d.P, out = {};
+const go = (x, y, z) => { P.pos.set(x, y, z); P.vel.set(0, 0, 0); d.step(3, 0.03); d.updateHint(); return d.hint; };
+out.h2 = go(-2.85, 0.03, -36); d.interact(); d.step(3, 0.03); out.cur = d.ACT.cur && d.ACT.cur.id;
+for (const c of d.CANS.slice(0, 3)) { const o = d.camera.position.clone().set(-2.8, 1.6, -36); const dir = c.m.position.clone().sub(o).normalize(); const r = d.traceShot(o, dir, 50); if (r.kind === 'cible') d.applyHit(r, dir, d.curW(), 1, false); d.step(2, 0.03); }
+out.sc = d.G_CANS.score; out.st = d.CANS.map((c) => c.st).join('');
+d.step(500, 0.05); out.after = d.ACT.cur && d.ACT.cur.id; out.st2 = d.CANS.map((c) => c.st).join('');
+out.h3 = go(-2.85, 0.03, -52); d.interact(); d.step(2, 0.03); out.cur3 = d.ACT.cur && d.ACT.cur.id;
+let best = 0; for (let pitch = 0.2; pitch < 0.75; pitch += 0.05) { P.yaw = Math.PI / 2; P.pitch = pitch; d.step(2, 0.03); const s0 = d.G_HOOP.score; d.interact(); d.step(40, 0.03); if (d.G_HOOP.score > s0) { best = pitch; break; } }
+out.pitchOK = +best.toFixed(2); out.sc3 = d.G_HOOP.score;
+d.step(800, 0.05); out.after3 = d.ACT.cur && d.ACT.cur.id;
+out.h4 = go(-2.85, 0.03, -68); d.interact(); d.step(3, 0.03);
+out.h5 = go(2.85, 0.03, -26); d.interact(); out.h6 = go(2.85, 0.03, -44); d.interact(); out.h7 = go(2.85, 0.03, -62); d.interact();
+out.tk = d.ACT.tickets;
+return JSON.stringify(out)

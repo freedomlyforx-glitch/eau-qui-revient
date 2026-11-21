@@ -1,0 +1,200 @@
+<canvas id="jeu" tabindex="-1"></canvas>
+
+<div id="hud" class="hud" hidden>
+  <div class="vhs">
+    <div class="ligne"><span class="point"></span><span>LECTURE</span></div>
+    <div class="petit" id="vhsDate">SAM. 31 OCT. 2026</div>
+    <div class="petit"><span id="vhsHeure">19:47</span>&nbsp;&nbsp;<span id="vhsTemps">00:00:00</span></div>
+  </div>
+  <div class="boss" id="boss" style="opacity:0"><div class="nom">LE REVENANT</div><div class="barre"><i id="bossBarre"></i></div></div>
+  <div class="score"><span class="etiquette">DISSOUS</span><span class="valeur" id="kills">0</span><span class="joueurs" id="nbJoueurs" hidden></span></div>
+  <div class="fil" id="fil"></div>
+  <div class="tickets" id="tickets"><span>TICKETS</span><b id="nbTickets">0</b></div>
+  <div class="mini" id="mini" hidden><div class="mini-nom" id="miniNom"></div><div class="mini-ligne"><b id="miniScore">0</b><i id="miniTemps"></i></div><small id="miniAide"></small></div>
+  <div class="viseur" id="viseur"><i></i><i></i><i></i><i></i><b></b></div>
+  <div class="impact" id="impact"><i></i><i></i><i></i><i></i></div>
+  <div class="lunette" id="lunette"></div>
+  <div class="fleche" id="fleche"><div class="chevron" id="chevron"></div><div class="dist" id="dist"></div></div>
+  <div class="phrase" id="phrase"></div>
+  <div class="statut" id="statut">IL SE REFORME</div>
+  <div class="invite" id="invite"></div>
+  <div class="aide" id="aide">Clic gauche : tirer · clic droit : viser · molette ou flèches : changer d'arme</div>
+  <div class="vie" id="vie" hidden><div class="etiq">CONSISTANCE</div><div class="barre"><i id="vieBarre"></i></div></div>
+  <canvas id="radar" width="360" height="360"></canvas>
+  <div class="armes" id="armes">
+    <div class="emplacements" id="emplacements"></div>
+    <div class="nom" id="armeNom">BRISE-RÊVE</div>
+    <div class="munitions" id="munitions"><span id="ammo">45</span><small id="ammoMax">/ ∞</small></div>
+    <div class="energie" id="energie" hidden><i id="energieBarre"></i></div>
+    <div class="recharge" id="recharge">RECHARGEMENT</div>
+  </div>
+  <div class="mort" id="mort"><div><b>TU T'ES DISSOUS</b><span id="mortTxt">Tu te reformes dans le refuge…</span></div></div>
+  <div class="jetpack" id="jetpack" hidden><i id="jetFeu"></i><div><b>JETPACK</b><small id="jetAide">maintiens <kbd>Espace</kbd> pour voler</small></div></div>
+</div>
+
+<div class="cadre" id="cadre"><i></i><i></i><i></i><i></i><span>PHOTO · clic ou E : déclencher · P : revenir au jeu</span></div>
+
+<div id="tactile" class="tactile" hidden>
+  <div class="zone-marche" id="zoneMarche"></div>
+  <div class="zone-vue" id="zoneVue"></div>
+  <div class="manette" id="manette"><i id="manetteBouton"></i></div>
+  <button class="tbtn gros t-tir" id="tTir" type="button">TIR</button>
+  <button class="tbtn t-viser" id="tViser" type="button">VISER</button>
+  <button class="tbtn t-saut" id="tSaut" type="button">SAUT</button>
+  <button class="tbtn t-plonge" id="tPlonge" type="button" hidden>PLONGER</button>
+  <button class="tbtn t-arme" id="tArme" type="button">ARME</button>
+  <button class="tbtn t-recharge" id="tRecharge" type="button">RECH.</button>
+  <button class="tbtn t-action" id="tAction" type="button" hidden>ACTION</button>
+  <button class="tbtn t-pause" id="tPause" type="button" aria-label="Pause">II</button>
+  <button class="tbtn t-discute" id="tDiscute" type="button" hidden>PARLER</button>
+</div>
+
+<div id="ecran" class="ecran">
+  <div class="ecran-contenu">
+    <div>
+      <p class="sur-titre">Las Palmas-sur-Mer · du matin jusqu'à la marée du soir</p>
+      <h1>L'eau<br>qui revient</h1>
+      <p class="pitch">Un front de mer pastel où le soleil finit toujours par se coucher. Une jetée foraine, une grande roue, des petits jeux, une villa sur la colline. Et quand la nuit ramène la marée, quelque chose fait d'eau sort de la mer. Dissous-le. Il reviendra.</p>
+      <p class="sur-titre" style="color:var(--peche)">Comment joues-tu&nbsp;?</p>
+      <div class="appareils">
+        <button class="bouton" id="choixPC" type="button" disabled><span class="tri"></span><span>Sur ordinateur</span></button>
+        <button class="bouton" id="choixMobile" type="button" disabled><span class="tri"></span><span>Sur téléphone ou tablette</span></button>
+      </div>
+      <p class="note" id="note">Le rêve se charge…</p>
+    </div>
+    <div class="encart">
+      <h2>COMMANDES SUR ORDINATEUR</h2>
+      <dl>
+        <dt><kbd>Z</kbd><kbd>Q</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>se déplacer (W A S D en clavier anglais)</dd>
+        <dt>Souris</dt><dd>regarder, clic gauche tirer, clic droit viser</dd>
+        <dt>Molette, flèches, 1 à 4</dt><dd>changer d'arme</dd>
+        <dt><kbd>Espace</kbd></dt><dd>sauter, nager vers le haut</dd>
+        <dt><kbd>Espace</kbd> maintenu</dt><dd>voler, si tu as trouvé le jetpack</dd>
+        <dt><kbd>C</kbd></dt><dd>plonger sous l'eau</dd>
+        <dt><kbd>Maj</kbd> <kbd>R</kbd></dt><dd>courir · recharger</dd>
+        <dt><kbd>E</kbd></dt><dd>agir : jouer aux baraques, monter dans un manège, pêcher, dormir, allumer l'ordinateur, choisir un disque, verrouiller le refuge</dd>
+        <dt><kbd>P</kbd></dt><dd>mode photo (clic pour prendre la photo)</dd>
+        <dt><kbd>X</kbd></dt><dd>ressortir de l'ordinateur</dd>
+        <dt><kbd>T</kbd></dt><dd>proposer de discuter à un joueur proche</dd>
+        <dt><kbd>Échap</kbd></dt><dd>pause, son et options</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<div id="prep" class="prep" hidden>
+  <div class="panneau">
+    <div class="panneau-tete"><h2>Prépare ton rêve</h2><button class="lien" id="retourAccueil" type="button">Revenir à l'accueil</button></div>
+    <div class="prep-grille">
+      <section class="bloc" aria-labelledby="tPerso">
+        <h3 id="tPerso">Ton personnage</h3>
+        <div class="perso">
+          <canvas id="apercu" width="400" height="440"></canvas>
+          <div class="bloc">
+            <label class="champ" for="pseudo">Pseudo<input id="pseudo" maxlength="16" autocomplete="off" spellcheck="false"></label>
+            <div class="rangee" id="typesPerso"></div>
+            <div class="puces" id="couleursPerso" aria-label="Couleur"></div>
+            <div class="puces" id="teintsPerso" aria-label="Teint" hidden></div>
+            <div class="rangee" id="accessoiresPerso"></div>
+          </div>
+        </div>
+      </section>
+      <section class="bloc" aria-labelledby="tMonde">
+        <h3 id="tMonde">Ton monde</h3>
+        <div class="rangee">
+          <button class="choix" id="mSolo" type="button" aria-pressed="true">Seul<small>serveur local, sur ta machine</small></button>
+          <button class="choix" id="mLigne" type="button" aria-pressed="false">En ligne<small>avec d'autres rêveurs</small></button>
+        </div>
+        <div id="blocLigne" class="bloc" hidden>
+          <p class="etat-reseau" id="etatReseau"></p>
+          <div class="liste-serveurs" id="listeServeurs"><p class="vide">Recherche des serveurs ouverts…</p></div>
+          <div class="rangee">
+            <button class="choix" id="sOuvert" type="button" aria-pressed="true">Ouvert<small>visible par tous</small></button>
+            <button class="choix" id="sFerme" type="button" aria-pressed="false">Fermé<small>sur invitation</small></button>
+            <button class="choix" id="rPaisible" type="button" aria-pressed="true">Paisible<small>on ne peut pas se toucher</small></button>
+            <button class="choix" id="rBagarre" type="button" aria-pressed="false">Bagarre<small>on peut s'entretuer</small></button>
+          </div>
+          <label class="champ" for="nomServeur">Nom du serveur<input id="nomServeur" maxlength="24" autocomplete="off" spellcheck="false"></label>
+          <button class="bouton petit" id="creerServeur" type="button">Créer ce serveur</button>
+        </div>
+        <h3>Ta résistance</h3>
+        <div class="rangee">
+          <button class="choix" id="dImmortel" type="button" aria-pressed="true">Immortel<small>le monstre t'éclabousse, c'est tout</small></button>
+          <button class="choix" id="dMortel" type="button" aria-pressed="false">Mortel<small>trois coups et tu te dissous</small></button>
+        </div>
+        <label class="champ" for="langue">Langue de discussion
+          <select id="langue">
+            <option value="fr">Français</option><option value="en">English</option><option value="es">Español</option><option value="de">Deutsch</option>
+            <option value="it">Italiano</option><option value="pt">Português</option><option value="nl">Nederlands</option><option value="pl">Polski</option>
+            <option value="ru">Русский</option><option value="tr">Türkçe</option><option value="ar">العربية</option><option value="ja">日本語</option>
+            <option value="ko">한국어</option><option value="zh">中文</option>
+          </select>
+        </label>
+      </section>
+    </div>
+    <div class="prep-pied">
+      <p class="resume" id="resume">Seul, immortel.</p>
+      <button class="bouton" id="entrer" type="button"><span class="tri"></span><span id="entrerTxt">Entrer dans le rêve</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="pause" class="pause" hidden>
+  <div class="panneau">
+    <div class="panneau-tete"><h2>Pause</h2><span id="pauseServeur" class="resume"></span></div>
+    <div class="reglages">
+      <label class="reglage" for="volMusique">Musique<input type="range" id="volMusique" min="0" max="1" step="0.05"><span class="val" id="valMusique"></span></label>
+      <label class="reglage" for="volArmes">Armes<input type="range" id="volArmes" min="0" max="1" step="0.05"><span class="val" id="valArmes"></span></label>
+      <label class="reglage" for="volEffets">Effets<input type="range" id="volEffets" min="0" max="1" step="0.05"><span class="val" id="valEffets"></span></label>
+      <label class="reglage" for="sensi">Visée<input type="range" id="sensi" min="0.3" max="2.5" step="0.05"><span class="val" id="valSensi"></span></label>
+      <label class="reglage" for="qualite">Image
+        <select id="qualite" class="champ" style="font-family:var(--f-vhs);font-size:20px;background:rgba(0,0,0,.25);color:var(--encre);border:1px solid var(--trait);padding:4px"><option value="ultra">Ultra</option><option value="haute">Haute</option><option value="moyenne">Moyenne</option><option value="basse">Basse</option></select><span></span></label>
+      <label class="reglage" for="styleImage">Rendu
+        <select id="styleImage" class="champ" style="font-family:var(--f-vhs);font-size:20px;background:rgba(0,0,0,.25);color:var(--encre);border:1px solid var(--trait);padding:4px"><option value="net">Net et réaliste</option><option value="cassette">Cassette vidéo (grain, franges)</option></select><span></span></label>
+      <label class="reglage" for="revenant">Revenant
+        <select id="revenant" class="champ" style="font-family:var(--f-vhs);font-size:20px;background:rgba(0,0,0,.25);color:var(--encre);border:1px solid var(--trait);padding:4px"><option value="nuit">La nuit seulement</option><option value="toujours">Jour et nuit</option><option value="jamais">Jamais (balade tranquille)</option></select><span></span></label>
+      <label class="coupe" for="coupeMusique"><input type="checkbox" id="coupeMusique"> Couper la musique</label>
+      <label class="coupe" for="coupeArmes"><input type="checkbox" id="coupeArmes"> Couper le bruit des armes</label>
+    </div>
+    <div class="actions">
+      <button class="bouton" id="reprendre" type="button"><span class="tri"></span>Reprendre</button>
+      <button class="bouton petit" id="inviter" type="button" hidden>Copier le lien d'invitation</button>
+      <button class="bouton petit" id="quitter" type="button">Retour à l'accueil</button>
+    </div>
+    <p class="note" id="noteInvite"></p>
+  </div>
+</div>
+
+<div id="discussion" class="discussion" hidden>
+  <header><b id="discTitre">Discussion</b><div><button class="lien" id="discBloquer" type="button">Bloquer</button><button class="lien" id="discFermer" type="button">Fermer</button></div></header>
+  <div class="messages" id="messages"></div>
+  <form class="saisie" id="saisie"><input id="message" maxlength="200" autocomplete="off" placeholder="Écris ici, Entrée pour envoyer"><button class="bouton petit" type="submit">Envoyer</button></form>
+</div>
+<div id="demande" class="demande" hidden><p id="demandeTxt"></p><div class="actions"><button class="bouton petit" id="demOui" type="button">Accepter (O)</button><button class="bouton petit" id="demNon" type="button">Refuser (N)</button></div></div>
+
+<div id="pc" class="pc" hidden></div>
+<div id="pcBandeau" class="pc-bandeau" hidden><svg viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges"><rect x="1" y="1" width="14" height="14" fill="#7b5cff"/><rect x="4" y="1" width="8" height="5" fill="#d9d4dc"/><rect x="9" y="2" width="2" height="3" fill="#7b5cff"/><rect x="3" y="8" width="10" height="7" fill="#fff6fa"/><rect x="4" y="10" width="8" height="1" fill="#ff7fbf"/><rect x="4" y="12" width="6" height="1" fill="#ff7fbf"/><rect x="14" y="1" width="1" height="1" fill="#1c1430"/></svg><span id="pcNom">NIVEAU 2</span><span class="pc-aide">· appuie sur <kbd>X</kbd> pour remonter au front de mer</span><button class="bouton petit" id="pcSortir" type="button">Remonter</button></div>
+<div id="choixVersion" class="versions" hidden role="dialog" aria-modal="true" aria-labelledby="versionsTitre">
+  <div class="versions-fenetre">
+    <div class="versions-barre"><span>MAREA OS · 1987</span><span aria-hidden="true">▪ ▪ ▪</span></div>
+    <h2 id="versionsTitre">Dans quel niveau du rêve veux-tu descendre&nbsp;?</h2>
+    <div class="versions-liste">
+      <button class="version" id="vLot" type="button"><svg viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges"><rect x="7" y="1" width="2" height="1" fill="#ff7fbf"/><rect x="5" y="2" width="6" height="1" fill="#ff7fbf"/><rect x="3" y="3" width="10" height="1" fill="#ff7fbf"/><rect x="1" y="4" width="14" height="2" fill="#ff7fbf"/><rect x="2" y="6" width="12" height="8" fill="#a3f3dc"/><rect x="4" y="8" width="3" height="3" fill="#7ff0ff"/><rect x="9" y="9" width="3" height="5" fill="#ff9fcd"/><rect x="0" y="14" width="16" height="2" fill="#8fd8a0"/><rect x="13" y="2" width="1" height="3" fill="#5a4bd8"/></svg><span class="v-texte"><b>Niveau 2 · Le lotissement</b><small>Le rêve d'avant : les maisons pastel, les lagons, le Revenant qui rôde</small></span><span class="v-touche">1</span></button>
+      <button class="version" id="vPremiere" type="button"><svg viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges"><rect x="1" y="1" width="14" height="14" fill="#7b5cff"/><rect x="4" y="1" width="8" height="5" fill="#d9d4dc"/><rect x="9" y="2" width="2" height="3" fill="#7b5cff"/><rect x="3" y="8" width="10" height="7" fill="#fff6fa"/><rect x="4" y="10" width="8" height="1" fill="#ff7fbf"/><rect x="4" y="12" width="6" height="1" fill="#ff7fbf"/><rect x="14" y="1" width="1" height="1" fill="#1c1430"/></svg><span class="v-texte"><b>Niveau 1 · La toute première version</b><small>Le tout premier rêve : une rue, le Revenant, une seule arme</small></span><span class="v-touche">2</span></button>
+      <button class="version ici" id="vPrincipale" type="button"><span class="v-texte"><b>Rester sur le front de mer</b><small>Tu es au niveau de base du rêve</small></span><span class="v-touche">3</span></button>
+    </div>
+    <p class="versions-pied" id="versionsPied">Clique sur un niveau, ou appuie sur 1, 2 ou 3 · Échap pour fermer</p>
+  </div>
+</div>
+<div id="jukeMenu" class="versions juke" hidden role="dialog" aria-modal="true" aria-labelledby="jukeTitre">
+  <div class="versions-fenetre juke-fenetre">
+    <div class="versions-barre juke-barre"><span>JUKEBOX DU FRONT DE MER</span><span class="juke-leds" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
+    <h2 id="jukeTitre">Six versions d'un même air</h2>
+    <p class="juke-info">Tous les jukebox du front de mer sont reliés : le disque que tu choisis joue partout, dans les maisons et dans les haut-parleurs dehors, et n'importe quel jukebox peut l'arrêter. Quand un morceau se termine, le jukebox en tire un autre au hasard.</p>
+    <p class="juke-encours" id="jukeEnCours"></p>
+    <div class="juke-liste" id="jukeListe"></div>
+    <div class="juke-actions"><button class="juke-stop" id="jukeStop" type="button"><span aria-hidden="true">■</span> Arrêter la musique <span class="v-touche">0</span></button></div>
+    <p class="versions-pied" id="jukePied">Clique sur un disque, ou appuie sur 1 à 6 · 0 pour arrêter · Échap pour fermer</p>
+  </div>
+</div>
+<div id="voile" class="voile"></div>
