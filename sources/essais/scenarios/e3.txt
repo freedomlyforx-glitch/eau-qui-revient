@@ -1,0 +1,15 @@
+d.setTimeOfDay(430); d.setState('apercu'); const cam = (x, y, z, tx, ty, tz) => { d.camera.position.set(x, y, z); d.camera.lookAt(tx, ty, tz); }; window.__cam = cam; cam(20, 1.7, 10, 30, 0.3, 5);
+---
+wait 3000
+---
+shot e_f
+---
+return JSON.stringify({ k: d.LSH.k, par: d.LSHU.par.value.toArray().map((v) => +v.toFixed(2)), cur: d.LSH.cur ? d.LSH.cur.p.toArray().map((v) => +v.toFixed(1)) : null, heads: d.LAMP_HEADS.slice(0, 4).map((h) => [h.x, h.z]) })
+---
+window.__cam(-1, 1.7, -27, 5, 0.6, -30);
+---
+wait 3000
+---
+shot e_g
+---
+return JSON.stringify({ k: d.LSH.k, cur: d.LSH.cur ? d.LSH.cur.p.toArray().map((v) => +v.toFixed(1)) : null })

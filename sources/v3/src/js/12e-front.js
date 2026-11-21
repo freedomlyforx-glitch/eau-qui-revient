@@ -28,7 +28,7 @@ const cylG = (r0, r1, h, n, open) => new THREE.CylinderGeometry(r0, r1, h, n || 
   let k = 0;
   for (let z = -6; z >= -114; z -= 12, k++) {
     mast(-6.6, z, 4.2, k % 2 === 1); mast(6.6, z, 4.2, k % 2 === 0);
-    if (k % 2 === 0) addSoft(0, 3.7, z, '#ffd2a0', 2.1, 11.5);
+    if (k % 2 === 0) addSoft(0, 3.7, z, '#ffd2a0', 2.1, 11.5).sh = 1;
     // lampes sous le tablier, chaudes ou turquoise, et liseré de néon le long des planches
     if (k % 2 === 1) for (const sx of [-1, 1]) { const col = (k + (sx > 0 ? 2 : 0)) % 4 === 1 ? '#ffb86a' : '#6ff2e2'; B.add(boxG(0.16, 0.1, 0.16), MAT.trunk, M4(sx * 5.7, -0.56, z)); lantern(sx * 5.7, -0.72, z, col, 0.11, { halo: 1.5, hk: 0.9, glint: 1.05, gw: 1.5 }); }
     if (k % 2 === 0) { glint(-7.05, -0.1, z, '#ff6fc8', 1.0, 2.2); glint(7.05, -0.1, z, '#6feaff', 1.0, 2.2); }

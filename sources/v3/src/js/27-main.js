@@ -6,6 +6,7 @@ BF.build(world, 'feuille', SHOOT);
 buildDestr(world);
 buildBulbs();
 buildKit();
+initLampShadow();
 const ENV_MATTE = 0.38;
 // matières : relief et brillance branchés automatiquement sur tout ce qui porte une texture de l'atelier,
 // et lumière d'ambiance du ciel dosée pour que les zones à l'ombre restent lisibles sans s'aplatir
@@ -133,7 +134,7 @@ function simulate(rdt, render) {
   if (!render) return;
   shadowTick = (shadowTick + 1) % (PRESETS[qualiteNom].shadowEvery || 1);
   if (shadowTick === 0) { placeSun(camera.position.x, camera.position.y, camera.position.z); renderer.shadowMap.needsUpdate = true; }
-  updateGrass(); updateFx(); renderReflection();
+  updateGrass(); updateFx(); updateLampShadow(rdt); renderVolClouds(); renderReflection();
   composer.render(rdt);
   if (PHOTO.snap) photoCapture();
   if (!$('prep').hidden) renderPreview(rdt);
@@ -166,6 +167,6 @@ requestAnimationFrame((t) => { last = t; frame(t); });
 $('choixPC').disabled = false; $('choixMobile').disabled = false;
 noteEl.textContent = PREP.join ? 'Tu as été invité dans un rêve partagé : choisis ton appareil pour le rejoindre.' : '';
 if (IS_TOUCH) { try { $('choixMobile').focus({ preventScroll: true }); } catch (e) {} }
-if (DEBUG) window.__dbg = { KW, kwDestroy, BK, PERF, REFL, GRASS, applyQuality, applyStyle, fxMat, sun, hemi, SKYU, FOGU, TH, SEA, TIME, NIGHT, setTimeOfDay, ACT, RIDES, BULBS, terrainU, seaMat, REV, FW, boardRide, leaveRide, actInteract, interact, updateHint, fwSalvo, togglePhoto, PHOTO, sleepInBed, DUCKS, CANS, HOOP, FISH, COQ, SIMON, FLAQ, PIANO, G_DUCKS, G_CANS, G_HOOP, FRONT, pickVersion, poolAt, inSea, monsterAllowed, get hint() { return interactHint; }, SHOOT, rayHouses, rayBalls, step: (n, dt) => { for (let i = 0; i < n; i++) simulate(dt || 0.05, false); }, shoot, traceShot, applyHit, curW, WEAPONS, MODELS, myBeam, refugeDoor, CROWNS, RES, softLights, zoneCur, get bloom() { return bloom; }, finalPass, scene, FOG, P, M, WPN, NET, PREP, PROFILE, SHEEP, houses, panels, glasses, pools, PORTALS, TRAMPS, camera, renderer, startGame, chooseDevice, killMonster, respawnMonster, hurtPlayer, destroyPanel, collapseHouse, shakePalm, explodeSheep, switchWeapon, enterPC, exitPC, PC, teleport, toggleRefugeLock, setState: (s) => { gameState = s; }, keys, sheepMatrices, CHAT, openChat, onChatMessage, translate, allPlayers, get ballCount() { return ballCount; }, DESTR, JET, spawnJetpack, equipJetpack, LAGOONS, SLIDES, BIGB, CARS, LAMP_HEADS, openVersions, PCMENU, groundAt, floors, PALMS, DIVES, SHOPS, LAGOONS_DEF, makeAvatar, animateAvatar, setKills: (n) => { kills = n; }, JUKE, TRACKS, jukePlay, jukeStop, jukeChoose, openJukeMenu, nearJukebox, jukeInside, MUS, AU, SPK, VOL, get kills() { return kills; } };
+if (DEBUG) window.__dbg = { VCL, LSH, LSHU, WETU, KW, kwDestroy, BK, PERF, REFL, GRASS, applyQuality, applyStyle, fxMat, sun, hemi, SKYU, FOGU, TH, SEA, TIME, NIGHT, setTimeOfDay, ACT, RIDES, BULBS, terrainU, seaMat, REV, FW, boardRide, leaveRide, actInteract, interact, updateHint, fwSalvo, togglePhoto, PHOTO, sleepInBed, DUCKS, CANS, HOOP, FISH, COQ, SIMON, FLAQ, PIANO, G_DUCKS, G_CANS, G_HOOP, FRONT, pickVersion, poolAt, inSea, monsterAllowed, get hint() { return interactHint; }, SHOOT, rayHouses, rayBalls, step: (n, dt) => { for (let i = 0; i < n; i++) simulate(dt || 0.05, false); }, shoot, traceShot, applyHit, curW, WEAPONS, MODELS, myBeam, refugeDoor, CROWNS, RES, softLights, zoneCur, get bloom() { return bloom; }, finalPass, scene, FOG, P, M, WPN, NET, PREP, PROFILE, SHEEP, houses, panels, glasses, pools, PORTALS, TRAMPS, camera, renderer, startGame, chooseDevice, killMonster, respawnMonster, hurtPlayer, destroyPanel, collapseHouse, shakePalm, explodeSheep, switchWeapon, enterPC, exitPC, PC, teleport, toggleRefugeLock, setState: (s) => { gameState = s; }, keys, sheepMatrices, CHAT, openChat, onChatMessage, translate, allPlayers, get ballCount() { return ballCount; }, DESTR, JET, spawnJetpack, equipJetpack, LAGOONS, SLIDES, BIGB, CARS, LAMP_HEADS, openVersions, PCMENU, groundAt, floors, PALMS, DIVES, SHOPS, LAGOONS_DEF, makeAvatar, animateAvatar, setKills: (n) => { kills = n; }, JUKE, TRACKS, jukePlay, jukeStop, jukeChoose, openJukeMenu, nearJukebox, jukeInside, MUS, AU, SPK, VOL, get kills() { return kills; } };
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) { try { hot.snapshot(() => ({ kills })); } catch (e) {} }

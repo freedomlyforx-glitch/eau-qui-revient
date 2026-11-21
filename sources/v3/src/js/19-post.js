@@ -166,7 +166,7 @@ function resize() {
   const w = Math.floor(innerWidth * pixelRatio), h = Math.floor(innerHeight * pixelRatio);
   composer.setSize(w, h); finalPass.uniforms.uRes.value.set(w, h);
   motes.uniforms.uScale.value = h * 0.5; if (coastLights) coastLights.uniforms.uH.value = h;
-  reflSize();
+  reflSize(); volSize();
 }
 addEventListener('resize', resize);
 // rayons du soleil et ombrage des recoins : réglés à chaque image selon la qualité, l'heure et la direction du regard
@@ -197,7 +197,8 @@ function applyQuality(name, auto) {
   setShadowArea(p.shW);
   setMonsterQuality(p.trans);
   if (typeof setGrass === 'function') setGrass(p.grass);
+  setVolClouds(p.vol);
   renderer.shadowMap.needsUpdate = true;
 }
 applyStyle(imageStyle);
-reflSize();
+reflSize(); setVolClouds(Q.vol);

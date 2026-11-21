@@ -49,11 +49,12 @@ THREE.ShaderChunk.fog_fragment = [
 /* ---------- qualité ---------- */
 // ao : ombrage des recoins · refl : reflets du décor dans la mer (taille relative) · rays : rayons du soleil
 // grass : brins d'herbe (0 = aucun) · tex : finesse des matières · shW : largeur de la zone d'ombres portées
+// vol : nuages calculés en volume (0 = nuages peints) · lampSh : ombres portées par la lampe la plus proche, la nuit
 const PRESETS = {
-  ultra: { pr: 2.0, shadow: 4096, shW: 150, trans: true, mc: 30, balls: 3000, debris: 500, soft: 10, confetti: 800, shadows: true, shadowEvery: 1, tex: 1024, ao: 1, refl: 0.75, rays: 1, grass: 3, fxaa: 1 },
-  haute: { pr: 1.5, shadow: 2048, shW: 110, trans: true, mc: 30, balls: 3000, debris: 500, soft: 10, confetti: 800, shadows: true, shadowEvery: 1, tex: 1024, ao: 1, refl: 0.5, rays: 1, grass: 2, fxaa: 1 },
-  moyenne: { pr: 1.5, shadow: 2048, shW: 96, trans: false, mc: 26, balls: 1500, debris: 320, soft: 6, confetti: 450, shadows: true, shadowEvery: 2, tex: 512, ao: 0, refl: 0, rays: 0, grass: 1, fxaa: 1 },
-  basse: { pr: 1.0, shadow: 1024, shW: 96, trans: false, mc: 22, balls: 700, debris: 200, soft: 4, confetti: 260, shadows: false, shadowEvery: 2, tex: 256, ao: 0, refl: 0, rays: 0, grass: 0, fxaa: 0 }
+  ultra: { pr: 2.0, shadow: 4096, shW: 150, trans: true, mc: 30, balls: 3000, debris: 500, soft: 10, confetti: 800, shadows: true, shadowEvery: 1, tex: 1024, ao: 1, refl: 0.75, rays: 1, grass: 3, fxaa: 1, vol: 2, lampSh: 1 },
+  haute: { pr: 1.5, shadow: 2048, shW: 110, trans: true, mc: 30, balls: 3000, debris: 500, soft: 10, confetti: 800, shadows: true, shadowEvery: 1, tex: 1024, ao: 1, refl: 0.5, rays: 1, grass: 2, fxaa: 1, vol: 1, lampSh: 1 },
+  moyenne: { pr: 1.5, shadow: 2048, shW: 96, trans: false, mc: 26, balls: 1500, debris: 320, soft: 6, confetti: 450, shadows: true, shadowEvery: 2, tex: 512, ao: 0, refl: 0, rays: 0, grass: 1, fxaa: 1, vol: 0, lampSh: 0 },
+  basse: { pr: 1.0, shadow: 1024, shW: 96, trans: false, mc: 22, balls: 700, debris: 200, soft: 4, confetti: 260, shadows: false, shadowEvery: 2, tex: 256, ao: 0, refl: 0, rays: 0, grass: 0, fxaa: 0, vol: 0, lampSh: 0 }
 };
 const QUAL_ORDER = ['basse', 'moyenne', 'haute', 'ultra'];
 let qualiteNom = store('qualite') || (IS_TOUCH ? 'moyenne' : 'haute');
@@ -108,10 +109,11 @@ function updateSoftLights(cam) {
   _softTmp.length = 0;
   for (const l of softLights) { if (!l.on || l.k <= 0) continue; const d = l.p.distanceTo(cam) - l.r * 1.2; _softTmp.push([d, l]); }
   _softTmp.sort((a, b) => a[0] - b[0]);
+  for (const l of softLights) l.slot = -1;
   for (let i = 0; i < SOFT_N; i++) {
     const e = _softTmp[i];
     if (e) {
-      const l = e[1]; let k = l.k;
+      const l = e[1]; let k = l.k; l.slot = i;
       if (l.flick) k *= 1 - l.flick * (0.5 + 0.5 * Math.sin(clockU.value * 13 + l.ph) * Math.sin(clockU.value * 7.3 + l.ph * 2));
       // fondu doux pour les lumières qui entrent ou sortent de la sélection
       const fade = i >= SOFT_N - 2 ? 0.5 : 1;
@@ -122,7 +124,11 @@ function updateSoftLights(cam) {
 }
 const SOFT_VERT_PARS = 'varying vec3 vSoftW;';
 const SOFT_VERT = 'vec4 sw4 = vec4( transformed, 1.0 );\n#ifdef USE_INSTANCING\nsw4 = instanceMatrix * sw4;\n#endif\nvSoftW = ( modelMatrix * sw4 ).xyz;';
-const SOFT_FRAG_PARS = 'varying vec3 vSoftW; uniform vec4 uSoftPos[' + SOFT_N + ']; uniform vec3 uSoftCol[' + SOFT_N + '];';
+// sols mouillés (la nuit, à marée haute) et ombre portée par la lampe la plus proche du joueur
+const WETU = { value: 0 };
+const LSH_ON = !!Q.lampSh && isWebGL2;
+const LSHU = { tex: { value: null }, mat: { value: new THREE.Matrix4() }, par: { value: new THREE.Vector4(0.35, 16, 0, -1) } };
+const SOFT_FRAG_PARS = 'varying vec3 vSoftW; uniform vec4 uSoftPos[' + SOFT_N + ']; uniform vec3 uSoftCol[' + SOFT_N + ']; uniform float uWetK;' + (LSH_ON ? ' uniform sampler2D uLsT; uniform mat4 uLsM; uniform vec4 uLsP;' : '');
 const SOFT_FRAG = [
   '{',
   '  vec3 swN = normalize( inverseTransformDirection( normal, viewMatrix ) );',
@@ -130,21 +136,36 @@ const SOFT_FRAG = [
   '    vec4 pr = uSoftPos[ i ];',
   '    vec3 L = pr.xyz - vSoftW; float d = length( L );',
   '    float att = clamp( 1.0 - d / pr.w, 0.0, 1.0 ); att *= att;',
+  '    if ( att <= 0.0 ) continue;',
+  LSH_ON ? [
+    // ombre de la lampe la plus proche : on compare la distance à la lampe avec celle du premier obstacle vu d'en haut
+    '    if ( uLsP.z > 0.0 && abs( float( i ) - uLsP.w ) < 0.5 ) { vec4 lp = uLsM * vec4( vSoftW, 1.0 );',
+    '      if ( lp.w > 0.4 ) { vec2 lc = lp.xy / lp.w; if ( lc.x > 0.01 && lc.x < 0.99 && lc.y > 0.01 && lc.y < 0.99 ) { float lit = 0.0, lim = lp.w - 0.07 - 0.012 * lp.w - 0.3 * ( 1.0 - abs( swN.y ) );',
+    '        for ( int k = 0; k < 4; k ++ ) { vec2 o = vec2( k == 0 || k == 3 ? - 1.0 : 1.0, k < 2 ? - 1.0 : 1.0 ) * 0.0014; float zs = texture2D( uLsT, lc + o ).x; lit += step( lim, uLsP.x * uLsP.y / ( uLsP.y - zs * ( uLsP.y - uLsP.x ) ) ); }',
+    '        float edge = smoothstep( 0.5, 0.42, max( abs( lc.x - 0.5 ), abs( lc.y - 0.5 ) ) ); att *= mix( 1.0, lit * 0.25, uLsP.z * edge ); } } }'].join('\n') : '',
   '    float nd = max( dot( swN, L / max( d, 0.001 ) ), 0.0 ) * 0.88 + 0.12;',
   '    reflectedLight.directDiffuse += diffuseColor.rgb * uSoftCol[ i ] * att * nd;',
+  // reflet de la lampe sur les matières lisses ou mouillées
+  '    float gl = 1.0 - material.roughness; if ( gl > 0.22 ) { vec3 Hs = normalize( normalize( ( viewMatrix * vec4( L, 0.0 ) ).xyz ) + geometry.viewDir ); float nh = max( dot( geometry.normal, Hs ), 0.0 );',
+  '      reflectedLight.directSpecular += uSoftCol[ i ] * att * pow( nh, 10.0 + 320.0 * gl * gl * gl ) * gl * gl * ( 0.25 + 2.4 * gl ) * step( 0.0, dot( swN, L ) ); }',
   '  }',
   '}'
 ].join('\n');
 function softPatch(shader, extra) {
   shader.uniforms.uSoftPos = SOFT.pos; shader.uniforms.uSoftCol = SOFT.col; shader.uniforms.uFogSun = FOGU.sun; shader.uniforms.uFogSunCol = FOGU.col;
+  shader.uniforms.uWetK = WETU; if (LSH_ON) { shader.uniforms.uLsT = LSHU.tex; shader.uniforms.uLsM = LSHU.mat; shader.uniforms.uLsP = LSHU.par; }
   shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\n' + SOFT_VERT_PARS).replace('#include <project_vertex>', '#include <project_vertex>\n' + SOFT_VERT);
   // la carte de relief porte aussi la brillance dans son canal alpha (matières de l'atelier)
   shader.fragmentShader = '#define SOFT_FOG\n' + shader.fragmentShader.replace('#include <common>', '#include <common>\n' + SOFT_FRAG_PARS).replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + SOFT_FRAG)
-    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n#ifdef USE_NORMALMAP\n\troughnessFactor *= texture2D( normalMap, vUv ).a;\n#endif');
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n#ifdef USE_NORMALMAP\n\troughnessFactor *= texture2D( normalMap, vUv ).a;\n#endif')
+    // sols mouillés : les surfaces à plat deviennent luisantes (matières créées avec « wet »)
+    .replace('#include <lights_physical_fragment>', '#ifdef SOFT_WET\n\troughnessFactor *= mix( 1.0, 0.36, uWetK * smoothstep( 0.75, 0.97, inverseTransformDirection( normal, viewMatrix ).y ) );\n#endif\n#include <lights_physical_fragment>');
   if (extra) extra(shader);
 }
 function std(o, extra) {
+  const wet = o && o.wet; if (wet) { o = Object.assign({}, o); delete o.wet; }
   const m = new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.85, metalness: 0, envMapIntensity: 0.7 }, o));
+  if (wet) m.defines = Object.assign(m.defines || {}, { SOFT_WET: '' });
   m.onBeforeCompile = (sh) => softPatch(sh, extra);
   if (extra) m.customProgramCacheKey = () => 'x' + extra.key;
   return m;

@@ -3,7 +3,7 @@
    reflets du couchant, marée qui remonte la nuit
    ========================================================= */
 const T_LITE = renderer.capabilities.maxTextures < 16 || /[?&]lite=1/.test(location.search);      // très vieux matériel : on se passe des couches roche et dallage
-const terrainU = { uSeaY: { value: SEA.surf }, uTime: clockU, uNight: NIGHT,
+const terrainU = { uSeaY: { value: SEA.surf }, uTime: clockU, uNight: NIGHT, uSunD: { value: new V3(0, 1, 0) }, uSunK: { value: 1 },
   uBlobC: { value: new THREE.Vector2(9999, 9999) }, uBlobA: { value: new THREE.Vector2(1, 1) }, uK1: { value: new V3() }, uK2: { value: new V3() }, uRect: { value: new THREE.Vector4(1, 0, 1, 0) },
   uGrassT: { value: TB.grass }, uGrassN: { value: TB.grass.userData.n }, uRockT: { value: TB.rock }, uRockN: { value: TB.rock.userData.n }, uPaveT: { value: T.concrete }, uPaveN: { value: T.concrete.userData.n }, uNoise: { value: T.noise },
   // le chemin dallé de la rampe est peint dans le relief lui-même : plus de nappe posée dessus, donc plus de trous
@@ -18,7 +18,7 @@ const terrainExtra = (sh) => {
   Object.assign(sh.uniforms, terrainU);
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aW; varying vec3 vW3;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvW3 = aW;');
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying vec3 vW3; uniform sampler2D uGrassT, uGrassN, uRockT, uRockN, uPaveT, uPaveN, uNoise; uniform float uSeaY, uTime, uNight; uniform vec2 uBlobC, uBlobA; uniform vec3 uK1, uK2; uniform vec4 uRect, uRamp; uniform vec4 uPav[3];\n' + CAUSTIC_FN)
+    .replace('#include <common>', '#include <common>\nvarying vec3 vW3; uniform sampler2D uGrassT, uGrassN, uRockT, uRockN, uPaveT, uPaveN, uNoise; uniform float uSeaY, uTime, uNight, uSunK; uniform vec2 uBlobC, uBlobA; uniform vec3 uK1, uK2, uSunD; uniform vec4 uRect, uRamp; uniform vec4 uPav[3];\n' + CAUSTIC_FN)
     .replace('#include <map_fragment>', [
       '{ vec2 q = (vSoftW.xz - uBlobC) / uBlobA; float th = atan(q.y, q.x); float f = 1.0 + uK1.x*sin(2.0*th+uK1.y) + uK1.z*sin(3.0*th+uK2.x) + uK2.y*sin(5.0*th+uK2.z); if (length(q) < f) discard; }',
       'if (vSoftW.x > uRect.x && vSoftW.x < uRect.y && vSoftW.z > uRect.z && vSoftW.z < uRect.w && vSoftW.y > 2.0) discard;',
@@ -45,7 +45,9 @@ const terrainExtra = (sh) => {
     ].join('\n'))
     .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(tRo, 0.14, tWet * smoothstep(uSeaY - 0.5, uSeaY - 0.05, vSoftW.y));')
     .replace('#include <normal_fragment_maps>', 'normal = perturbNormal2Arb( - vViewPosition, normal, normalize( vec3( tN.xy * (1.0 - 0.8 * tWet), tN.z ) ), faceDirection );')
-    .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += caustF(vSoftW.xz, uTime) * vec3(0.45,0.95,1.0) * 0.22 * (1.0 - uNight * 0.7) * smoothstep(uSeaY - 0.05, uSeaY - 0.7, vSoftW.y) * (1.0 - smoothstep(uSeaY - 5.0, uSeaY - 11.0, vSoftW.y));');
+    // le sable sec scintille : de minuscules facettes renvoient l'astre et changent dès qu'on bouge
+    .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ vec3 tV = cameraPosition - vSoftW; float tD = length(tV); tV /= tD; float tS = texture2D(uNoise, wp * 2.3 + tV.xz * 0.9).a * texture2D(uNoise, wp * 5.1 - tV.xz * 1.7 + 0.37).a; totalEmissiveRadiance += vec3(1.0, 0.92, 0.84) * smoothstep(0.33, 0.4, tS) * (1.0 - tGw) * (1.0 - tRw) * (1.0 - tPw) * (1.0 - tWet) * uSunK * pow(max(dot(reflect(-tV, vec3(0.0, 1.0, 0.0)), uSunD), 0.0), 2.0) * 2.4 * (1.0 - smoothstep(5.0, 40.0, tD)); }\n#include <sable_fin>')
+    .replace('#include <sable_fin>', 'totalEmissiveRadiance += caustF(vSoftW.xz, uTime) * vec3(0.45,0.95,1.0) * 0.22 * (1.0 - uNight * 0.7) * smoothstep(uSeaY - 0.05, uSeaY - 0.7, vSoftW.y) * (1.0 - smoothstep(uSeaY - 5.0, uSeaY - 11.0, vSoftW.y));');
 };
 terrainExtra.key = 'relief2';
 const terrainMat = std({ color: C('#ffffff'), map: TB.sand, normalMap: TB.sand.userData.n, roughness: 1, envMapIntensity: 1.25 }, terrainExtra);
@@ -72,7 +74,7 @@ const terrainMat = std({ color: C('#ffffff'), map: TB.sand, normalMap: TB.sand.u
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setAttribute('aW', new THREE.BufferAttribute(aw, 3));
   g.setIndex(idx); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, terrainMat); m.receiveShadow = true; m.userData.surface = 'herbe'; m.frustumCulled = false; world.add(m);
+  const m = new THREE.Mesh(g, terrainMat); m.receiveShadow = true; m.userData.surface = 'herbe'; m.userData.noLampShadow = true; m.frustumCulled = false; world.add(m);
 }
 /* ---------- la mer ---------- */
 const HM = (() => {
@@ -90,6 +92,8 @@ const WAVE_GLSL = 'void wave1(vec2 p, float t, vec2 D, float k, float w, float A
   'float seaWaves(vec2 p, float t, float dq, out vec2 g){ float h = 0.0; g = vec2(0.0);\n' +
   WAVES.map(([dx, dz, L, A]) => { const l = Math.hypot(dx, dz), k = 2 * PI / L, w = Math.sqrt(9.81 * k) * 0.62, f = (v) => v.toFixed(5);
     return '  wave1(p, t, vec2(' + f(dx / l) + ', ' + f(dz / l) + '), ' + f(k) + ', ' + f(-w) + ', ' + f(A) + ' * (1.0 - smoothstep(' + f(L * 2.7) + ', ' + f(L * 5.4) + ', dq)), h, g);'; }).join('\n') + '\n  return h; }';
+// rouleaux du rivage : des crêtes parallèles à la plage qui avancent vers elle (x : hauteur, y : pente le long de la phase, z : crête)
+const BRK_GLSL = 'vec3 brk(float depth, vec2 p, float t){ float ph = depth * 7.0 + t * 1.1 + sin(p.x * 0.05 + t * 0.2) * 0.8 + sin(p.x * 0.013) * 1.7, s = max(sin(ph), 0.0), A = smoothstep(0.03, 0.5, depth) * (1.0 - smoothstep(0.9, 2.4, depth)) * 0.2; return vec3(A * s * s, A * 2.0 * s * cos(ph), s); }';
 const SEA_GRID = { ultra: [192, 1.042], haute: [160, 1.05], moyenne: [112, 1.07], basse: [80, 1.1] }[qualiteNom] || [160, 1.05];
 const HM_GLSL = (name) => 'float ' + name + '(vec2 p){ float v = texture2D(uHM, (p - uHMr.xy) * uHMr.zw).r; return ' + (HM.packed ? 'v * 32.0 - 13.0' : 'v') + '; }';
 const seaMat = new THREE.ShaderMaterial({
@@ -101,19 +105,20 @@ const seaMat = new THREE.ShaderMaterial({
     uWN: { value: T.waterN }, uRefl: { value: null }, uReflM: { value: new THREE.Matrix4() }, uReflOn: { value: 0 }
   }, SKYU),
   vertexShader: [
-    'uniform float uTime, uSeaY, uGeo, uCalm; uniform sampler2D uHM; uniform vec4 uHMr; varying vec3 vW;', WAVE_GLSL, HM_GLSL('terrHv'),
+    'uniform float uTime, uSeaY, uGeo, uCalm; uniform sampler2D uHM; uniform vec4 uHMr; varying vec3 vW;', WAVE_GLSL, BRK_GLSL, HM_GLSL('terrHv'),
     'void main(){',
     '  vec2 xz = position.xz + cameraPosition.xz; float d = length(position.xz);',
     // les vagues s'aplatissent là où l'eau est peu profonde, et autour du nageur pour ne pas lui passer par-dessus la tête
-    '  float shoal = smoothstep(0.05, 1.7, uSeaY - terrHv(xz)) * mix(1.0, smoothstep(1.0, 9.0, d), uCalm);',
+    '  float dep = uSeaY - terrHv(xz), calm = mix(1.0, smoothstep(1.0, 9.0, d), uCalm), shoal = smoothstep(0.05, 1.7, dep) * calm;',
     '  vec2 g; float h = seaWaves(xz, uTime, d / uGeo, g) * shoal;',
+    '  if (dep > 0.0 && dep < 2.5) h += brk(dep, xz, uTime).x * calm * (1.0 - smoothstep(22.0, 60.0, d / uGeo));',
     '  vW = vec3(xz.x, uSeaY + h, xz.y);',
     '  gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);',
     '}'
   ].join('\n'),
   fragmentShader: [
     'uniform float uTime, uSeaY, uNight, uReflOn, uFogDensity, uCalm, uNet; uniform sampler2D uHM, uWN, uRefl; uniform mat4 uReflM; uniform vec4 uHMr; uniform vec3 uSunDir, uSunCol, uMoonDir, uMoonCol, uFW, uFogColor, uFogSun, uFogSunCol; uniform vec4 uRip[6]; uniform vec2 uC;',
-    'varying vec3 vW;', (qualiteNom === 'moyenne' || qualiteNom === 'basse') ? '#define SKY_LITE' : '', SKY_GLSL, WAVE_GLSL, CAUSTIC_FN, HM_GLSL('terrH'),
+    'varying vec3 vW;', (qualiteNom === 'moyenne' || qualiteNom === 'basse') ? '#define SKY_LITE' : '', SKY_GLSL, WAVE_GLSL, BRK_GLSL, CAUSTIC_FN, HM_GLSL('terrH'),
     // éclat d'un astre sur l'eau : loi de Beckmann sur la demi-direction, qui étire d'elle-même le reflet vers l'horizon
     'float glit(vec3 N, vec3 V, vec3 L, float s2){ vec3 H = normalize(V + L); float nh = max(dot(N, H), 1e-3), n2 = nh * nh; return exp((n2 - 1.0) / (n2 * s2)) / (s2 * n2 * n2); }',
     'void main(){',
@@ -130,7 +135,11 @@ const seaMat = new THREE.ShaderMaterial({
     '  if (dist < 28.0) gd += (texture2D(uWN, p * 1.63 + vec2(-t * 0.05, t * 0.04)).xy - 0.5) * 0.3 * (1.0 - dist / 28.0);',
     '  g -= gd * mix(0.45, 1.0, smoothstep(0.0, 1.6, depth));',
     '  float sp = texture2D(uNoise, p * 0.31 + t * 0.02).a;',
-    '  float foamR = 0.0;',
+    '  float foamR = 0.0, brF = 0.0;',
+    // les rouleaux : leur pente suit celle de la plage, leur crête blanchit en approchant du bord
+    '  if (depth > 0.0 && depth < 2.5) { float calm = mix(1.0, smoothstep(1.0, 9.0, length(Vd.xz)), uCalm); vec3 b = brk(depth, p, t) * calm;',
+    '    vec2 gt = vec2(terrH(p + vec2(1.2, 0.0)) - terrH(p - vec2(1.2, 0.0)), terrH(p + vec2(0.0, 1.2)) - terrH(p - vec2(0.0, 1.2))) / 2.4;',
+    '    g -= gt * b.y * 7.0; wh += b.x; brF = smoothstep(0.55, 0.97, b.z) * smoothstep(2.4, 1.0, depth) * smoothstep(0.02, 0.22, depth) * calm; }',
     '  for (int i = 0; i < 6; i++) { vec4 r = uRip[i]; float age = t - r.z; if (age > 0.0 && age < 4.0) { vec2 dv = p - uC - r.xy; float d = length(dv); float w = sin((d - age*2.4)*5.0) * exp(-abs(d - age*2.4)*1.1) * (1.0 - age/4.0) * r.w; g += dv / max(d, 0.01) * w * 0.3; foamR += max(w, 0.0) * 0.35; } }',
     '  vec3 N = normalize(vec3(-g.x, 1.0, -g.y));',
     '  bool below = cameraPosition.y < vW.y;',
@@ -166,7 +175,7 @@ const seaMat = new THREE.ShaderMaterial({
     '  float edge = smoothstep(0.5, 0.0, depth + sw + (fn - 0.5) * 0.3);',
     '  float lines = pow(max(0.0, sin(depth*5.5 + t*1.2 + fn*3.2)), 6.0) * smoothstep(1.7, 0.15, depth) * smoothstep(0.0, 0.1, depth);',
     '  float crest = smoothstep(0.27, 0.43, wh) * (1.0 - smoothstep(40.0, 130.0, dist)) * 0.55;',
-    '  float foam = clamp(edge + lines*0.6 + foamR + crest, 0.0, 1.0) * smoothstep(0.2, 0.55, fn2 + edge * 0.6);',
+    '  float foam = clamp(edge + lines*0.35 + foamR + crest + brF * 0.9, 0.0, 1.0) * smoothstep(0.2, 0.55, fn2 + edge * 0.6 + brF * 0.35);',
     '  vec3 foamCol = mix(vec3(1.0, 0.96, 0.97), vec3(0.42, 0.45, 0.72), uNight * 0.8) + uGlow * 0.25 * sunVis;',
     '  col = mix(col, foamCol, foam * 0.92);',
     '  float alpha = mix(smoothstep(0.0, 0.3, depth) * 0.5 + dk * 0.46, 1.0, fres);',
@@ -205,6 +214,7 @@ const buoys = new THREE.Group(); world.add(buoys);
 function updateSea(dt) {
   SEA.surf = SEA.low + SEA.range * smooth(0.15, 1, NIGHT.value);
   terrainU.uSeaY.value = SEA.surf; buoys.position.y = SEA.surf + Math.sin(clockU.value * 0.9) * 0.06;
+  terrainU.uSunD.value.copy(NIGHT.value > 0.5 ? LIGHT_DIR : SKY_SUN).normalize(); terrainU.uSunK.value = NIGHT.value > 0.5 ? 0.45 * smooth(0.5, 1, NIGHT.value) : smooth(-0.04, 0.05, SKY_SUN.y) * (1 - smooth(0.2, 0.5, NIGHT.value));
   const hc = camera.position.y - SEA.surf; seaMat.uniforms.uCalm.value = hc < 0 ? 1 : 1 - smooth(0.45, 1.3, hc); seaMat.uniforms.uNet.value = lerp(0.2, 0.34, NIGHT.value);
   const fw = seaMat.uniforms.uFW.value; fw.multiplyScalar(Math.exp(-dt * 2.2));
 }
@@ -238,9 +248,10 @@ function renderReflection() {
   cp.multiplyScalar(2.0 / cp.dot(q));
   pm[2] = cp.x; pm[6] = cp.y; pm[10] = cp.z + 1.0 - 0.003; pm[14] = cp.w;
   const old = renderer.getRenderTarget(), auto = renderer.autoClear;
+  const volOn = skyMat.uniforms.uVolOn.value; skyMat.uniforms.uVolOn.value = 0;      // dans le reflet, le ciel garde ses nuages peints
   sea.visible = false; for (const o of REFL.hide) o.visible = false;
   renderer.autoClear = true; renderer.setRenderTarget(REFL.rt); renderer.render(scene, rc);
   renderer.setRenderTarget(old); renderer.autoClear = auto;
-  sea.visible = true; for (const o of REFL.hide) o.visible = true;
+  sea.visible = true; for (const o of REFL.hide) o.visible = true; skyMat.uniforms.uVolOn.value = volOn;
   su.uReflOn.value = 1;
 }

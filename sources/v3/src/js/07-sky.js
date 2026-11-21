@@ -24,12 +24,14 @@ const SKY_GLSL = [
   '  col = mix(col, uCloudRim, clamp((1.0 - core) * lit * lit * 0.6 + pow(ca, 7.0) * (1.0 - core * 0.8) * 0.7, 0.0, 1.0));',
   '  col += uGlow * pow(ca, 5.0) * (1.3 - dens * 0.7);',
   '  return mix(col, mix(uLow, uHor, 0.55) * 1.12, smoothstep(0.36, 0.02, h) * 0.5); }',
-  'vec4 skyClouds(vec3 d, vec3 sd){',
+  // ceilK = 0 : sans le plafond (il est alors calculé en volume et posé par-dessus)
+  'vec4 skyClouds2(vec3 d, vec3 sd, float ceilK){',
   '  float h = d.y; if (h < 0.01) return vec4(0.0);',
   '  float ca = max(dot(d, sd), 0.0);',
   '  vec2 p = d.xz / (h + 0.16), q = p * 0.11 + vec2(uCloudT, uCloudT * 0.38);',
   '  vec3 col = vec3(0.0); float al = 0.0;',
   // 1. le plafond
+  '  if (ceilK > 0.5) {',
   '  float n = cloudH(q), det = texture2D(uCloud, q * 3.1 + vec2(-uCloudT * 1.3, uCloudT * 0.6)).g;',
   '  float e = n - uCov - (1.0 - det) * 0.09, dens = smoothstep(0.0, 0.1, e) * smoothstep(0.03, 0.2, h);',
   '  if (dens > 0.003) {',
@@ -40,6 +42,7 @@ const SKY_GLSL = [
   '    float lit = clamp(0.5 + (n - cloudH(q + ld * 0.014)) * 7.0, 0.0, 1.0);',
   '#endif',
   '    col = cloudShade(lit, smoothstep(0.03, 0.32, e), ca, dens, h); al = dens * 0.96;',
+  '  }',
   '  }',
   // 2. les cumulus de l'horizon, qui se dressent comme des tours (une trouée côté terre cache le raccord du déroulé)
   '  if (h < 0.46) {',
@@ -64,6 +67,7 @@ const SKY_GLSL = [
   '  float cir = smoothstep(0.5, 0.8, texture2D(uCloud, p * 0.024 + vec2(uCloudT * 0.45, 0.3)).a) * 0.4 * smoothstep(0.04, 0.3, h);',
   '  if (cir > 0.003) { vec3 cc = mix(uCloudLit, uCloudRim, 0.35) * (0.7 + 0.6 * pow(ca, 3.0)); float a2 = cir * (1.0 - al); col = mix(cc, col, al / max(al + a2, 1e-3)); al += a2; }',
   '  return vec4(col, al); }',
+  'vec4 skyClouds(vec3 d, vec3 sd){ return skyClouds2(d, sd, 1.0); }',
   'vec3 skyAt(vec3 d, vec3 sd){ vec3 c = skyGrad(d); float ca = max(dot(d, sd), 0.0); c += uGlow * (pow(ca, 10.0) * 0.55 + pow(ca, 220.0) * 1.1); vec4 cl = skyClouds(d, sd); return mix(c, cl.rgb, cl.a); }'
 ].join('\n');
 // la voie lactée suit un grand cercle qui monte de la mer, à droite de la lune
@@ -72,12 +76,13 @@ const skyMat = new THREE.ShaderMaterial({
   uniforms: Object.assign({
     uSunA: { value: HDR('#ffe36e', 1.45) }, uSunB: { value: HDR('#ff4f9f', 1.35) },
     uSunDir: { value: SKY_SUN }, uTime: clockU, uNight: NIGHT, uMoonDir: { value: LIGHT_DIR }, uBelow: SKYU.uBelow, uMoonT: { value: T.moon },
-    uMwN: { value: MW_N }, uMwT1: { value: MW_T1 }, uMwT2: { value: MW_T2 }
+    uMwN: { value: MW_N }, uMwT1: { value: MW_T1 }, uMwT2: { value: MW_T2 },
+    uVolT: { value: null }, uVolPx: { value: new THREE.Vector4(1, 1, 0, 0) }, uVolOn: { value: 0 }
   }, SKYU),
   vertexShader: 'varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position = p.xyww; }',
   fragmentShader: [
     SKY_GLSL,
-    'uniform vec3 uBelow, uSunA, uSunB, uSunDir, uMoonDir, uMwN, uMwT1, uMwT2; uniform float uTime, uNight; uniform sampler2D uMoonT; varying vec3 vDir;',
+    'uniform vec3 uBelow, uSunA, uSunB, uSunDir, uMoonDir, uMwN, uMwT1, uMwT2; uniform float uTime, uNight, uVolOn; uniform sampler2D uMoonT, uVolT; uniform vec4 uVolPx; varying vec3 vDir;',
     'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }',
     'vec3 hue(float h){ return clamp(abs(mod(h*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0,0.0,1.0); }',
     // un semis d'étoiles : chacune a sa place dans sa case, son éclat et son scintillement
@@ -129,8 +134,12 @@ const skyMat = new THREE.ShaderMaterial({
     '    col += vec3(0.66, 0.72, 1.0) * (pow(max(cm, 0.0), 60.0) * 0.2 + pow(max(cm, 0.0), 900.0) * 0.45 * step(1.0, mr)) * uNight; }',
     // les nuages passent devant, sauf au cœur du soleil et de la lune qui percent au travers
     '  vec3 ld = mix(sd, md, step(0.5, uNight));',
-    '  vec4 cl = skyClouds(d, ld); cl.a *= 1.0 - 0.75 * smoothstep(0.985, 0.998, max(ca, 0.0)) - 0.62 * smoothstep(0.992, 0.999, max(cm, 0.0)) * uNight;',
+    '  float pierce = 1.0 - 0.75 * smoothstep(0.985, 0.998, max(ca, 0.0)) - 0.62 * smoothstep(0.992, 0.999, max(cm, 0.0)) * uNight;',
+    '  vec4 cl = skyClouds2(d, ld, 1.0 - uVolOn); cl.a *= pierce;',
     '  col = mix(col, cl.rgb, clamp(cl.a, 0.0, 1.0));',
+    // le plafond calculé en volume : une petite image posée devant le reste du ciel
+    '  if (uVolOn > 0.5) { vec4 vc = texture2D(uVolT, gl_FragCoord.xy * uVolPx.xy) * pierce;',
+    '    col = col * (1.0 - vc.a) + vc.rgb; }',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
   ].join('\n'),
@@ -244,7 +253,7 @@ const envScene = new THREE.Scene();
 envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), skyMat));
 let envRT = pmrem.fromScene(envScene, 0.015, 0.1, 200);
 scene.environment = envRT.texture;
-function refreshEnv() { const rt = pmrem.fromScene(envScene, 0.015, 0.1, 200); scene.environment = rt.texture; envRT.dispose(); envRT = rt; }
+function refreshEnv() { const vo = skyMat.uniforms.uVolOn.value; skyMat.uniforms.uVolOn.value = 0; const rt = pmrem.fromScene(envScene, 0.015, 0.1, 200); scene.environment = rt.texture; envRT.dispose(); envRT = rt; skyMat.uniforms.uVolOn.value = vo; }
 /* ---------- l'heure du rêve : un long coucher de soleil, puis la nuit, puis le soleil hésite et revient ---------- */
 const TIME = { t: 215, len: 660, envN: 0, dusk: 300, night: 370, dawn: 590 };
 function nightAt(t) { t = ((t % TIME.len) + TIME.len) % TIME.len; if (t < TIME.dusk) return 0; if (t < TIME.night) return smooth(TIME.dusk, TIME.night, t); if (t < TIME.dawn) return 1; return 1 - smooth(TIME.dawn, TIME.len, t); }
@@ -261,7 +270,9 @@ function applyTime() {
   u.uGlow.value.copy(DAYC.glow).lerp(NITC.glow, n).multiplyScalar(lerp(1, 0.35, smooth(0.5, 1, n)));
   sun.color.copy(DAYC.sun).lerp(NITC.sun, n); sun.intensity = lerp(2.5, 0.62, n);
   hemi.color.copy(DAYC.hs).lerp(NITC.hs, n); hemi.groundColor.copy(DAYC.hg).lerp(NITC.hg, n); hemi.intensity = lerp(0.055, 0.2, n);
-  ZONE_DEF.bloom = lerp(0.24, 0.6, n); ZONE_DEF.fog = lerp(0.0017, 0.0022, n); ZONE_DEF.expo = lerp(0.5, 1.0, n);
+  ZONE_DEF.bloom = lerp(0.24, 0.6, n); ZONE_DEF.fog = lerp(0.0013, 0.0022, n); ZONE_DEF.expo = lerp(0.5, 1.0, n);
+  // la marée et la fraîcheur du soir : planches, dalles et trottoirs deviennent luisants
+  WETU.value = smooth(0.2, 0.9, n) * 0.9;
   // les montagnes du fond s'assombrissent la nuit : il ne reste que leurs arêtes au néon
   if (mountWire) mountWire.opacity = lerp(0.4, 0.045, n);
   // nuages : dorés le jour, braise au crépuscule, bleu nuit sous la lune

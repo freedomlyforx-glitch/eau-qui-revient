@@ -1,0 +1,13 @@
+d.setTimeOfDay(215); d.setState('apercu'); d.step(2, 0.03); const s = d.SEA.surf; let zs = null; for (let z = -5; z > -120; z -= 0.5) { if (d.TH(40, z) < s) { zs = z; break; } } window.__zs = zs; return JSON.stringify({ surf: s, low: d.SEA.low, zs, slope: [d.TH(40, zs - 5), d.TH(40, zs - 15), d.TH(40, zs - 30)] })
+---
+d.camera.position.set(34, d.SEA.surf + 1.5, window.__zs + 3); d.camera.lookAt(70, d.SEA.surf, window.__zs - 12);
+---
+wait 2500
+---
+shot e_h
+---
+d.camera.position.set(40, d.SEA.surf + 2.6, window.__zs + 8); d.camera.lookAt(40, d.SEA.surf - 0.5, window.__zs - 14);
+---
+wait 2500
+---
+shot e_i

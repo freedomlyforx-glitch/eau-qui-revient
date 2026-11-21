@@ -15,11 +15,11 @@ function cached(key, make) { return matCache[key] || (matCache[key] = make()); }
 const MAT = {
   foundation: std({ color: C('#b8adc9'), map: T.stucco }),
   trim: std({ color: C('#f7edf4'), roughness: 0.6 }),
-  concrete: std({ color: C('#e9dfe9'), map: T.concrete, roughness: 0.9 }),
+  concrete: std({ color: C('#e9dfe9'), map: T.concrete, roughness: 0.9, wet: true }),
   concreteFlat: std({ color: C('#e6dce8'), map: T.concrete, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-  asphalt: std({ color: C('#ffffff'), map: T.asphalt, roughness: 0.92, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+  asphalt: std({ color: C('#ffffff'), map: T.asphalt, roughness: 0.92, wet: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
   grass: std({ color: C('#ffffff'), map: T.grass, roughness: 0.95, envMapIntensity: 0.5 }),
-  checker: std({ color: C('#e8dde6'), map: T.checker, roughness: 0.35, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+  checker: std({ color: C('#e8dde6'), map: T.checker, roughness: 0.35, wet: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
   paint: std({ color: C('#fff3c8'), roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
   paintW: std({ color: C('#fffafc'), roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
   pole: std({ color: C('#e9e2f5'), metalness: 0.4, roughness: 0.4 }),
@@ -63,8 +63,8 @@ const BUSH_COLORS = ['#7fc59a', '#6db892', '#9ad3a0', '#ff9cc8', '#c9a6f2', '#78
 
 
 /* ---------- la ville : promenade en damier, place de la jetée, avenue ---------- */
-MAT.planks = std({ color: C('#ffffff'), map: T.planks, normalMap: T.planksN, normalScale: new THREE.Vector2(0.7, 0.7), roughness: 0.72 });
-MAT.planksDeck = std({ color: C('#ffffff'), map: T.planks, normalMap: T.planksN, normalScale: new THREE.Vector2(0.7, 0.7), roughness: 0.72, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+MAT.planks = std({ color: C('#ffffff'), map: T.planks, normalMap: T.planksN, normalScale: new THREE.Vector2(0.7, 0.7), roughness: 0.72, wet: true });
+MAT.planksDeck = std({ color: C('#ffffff'), map: T.planks, normalMap: T.planksN, normalScale: new THREE.Vector2(0.7, 0.7), roughness: 0.72, wet: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 function flat(x0, x1, z0, z1, y, mat, surf) { const m = new THREE.Mesh(flatG(x1 - x0, z1 - z0), mat); m.position.set((x0 + x1) / 2, y, (z0 + z1) / 2); m.receiveShadow = true; m.userData.surface = surf || 'dur'; world.add(m); SHOOT.push(m); return m; }
 function sidewalk(x0, x1, z0, z1, top) { top = top || 0.12; B.add(boxG(x1 - x0, top, z1 - z0), MAT.concrete, M4((x0 + x1) / 2, top / 2, (z0 + z1) / 2), false, true); addFloorRect(x0, x1, z0, z1, top); }
 flat(PROM.x0, PROM.x1, PROM.z0 + 1.6, PROM.z1, 0.02, MAT.checker);
@@ -169,7 +169,7 @@ function lamp(x, z, side, alongX, tall) {
     B.add(boxG(alongX ? 0.32 : 0.6, 0.17, alongX ? 0.6 : 0.32), MAT.pole, M4(x + hx, H - 0.18, z + hz));
     const cone = new THREE.Mesh(new THREE.ConeGeometry(2.3, H - 1.2, 32, 1, true), coneMat);
     cone.position.set(x + hx, H - 0.3 - (H - 1.2) / 2, z + hz); world.add(cone);
-    const light = addSoft(x + hx, H - 0.6, z + hz, '#ffcdb8', 2.2, 11);
+    const light = addSoft(x + hx, H - 0.6, z + hz, '#ffcdb8', 2.2, 11); light.sh = 1;
     LAMP_LIGHTS.push(light);
     LAMP_HEADS.push({ id: LAMP_HEADS.length, x: x + hx, y: H - 0.2, z: z + hz, hx: alongX ? 0.17 : 0.31, hy: 0.13, hz: alongX ? 0.31 : 0.17, c: 1, s: 0, light, cone, alive: true, tDead: 0,
       bm: new THREE.Matrix4().compose(new V3(x + hx, H - 0.28, z + hz), new THREE.Quaternion(), new V3(alongX ? 0.24 : 0.48, 0.04, alongX ? 0.48 : 0.24)) });
