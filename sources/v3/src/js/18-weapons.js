@@ -8,40 +8,115 @@ const WEAPONS = [
   { id: 'laser', nom: 'RAYON NÉON', beam: true, dps: { m: 42, p: 13, s: 7, j: 55 }, drain: 21, regen: 32, fov: 58 }
 ];
 WEAPONS.forEach((w) => { w.ammo = w.mag || 0; w.energy = 100; w.over = 0; });
-const gunRoot = new THREE.Group(); camera.add(gunRoot);
+const GUN_SCALE = 1.28;   // l'arme tenue un peu plus près de l'œil : on en voit mieux les détails
+const gunRoot = new THREE.Group(); gunRoot.scale.setScalar(GUN_SCALE); camera.add(gunRoot);
 const GM = {
-  metal: std({ color: C('#353049'), metalness: 0.5, roughness: 0.38, envMapIntensity: 0.9 }),
-  poly: std({ color: C('#2e293f'), roughness: 0.6, envMapIntensity: 0.9 }),
-  lilac: std({ color: C('#c8b0ff'), metalness: 0.35, roughness: 0.35, envMapIntensity: 1.1 }),
-  mint: std({ color: C('#9ff0d8'), metalness: 0.3, roughness: 0.35, envMapIntensity: 1.1 }),
-  sky: std({ color: C('#b8d8ff'), metalness: 0.4, roughness: 0.3, envMapIntensity: 1.2 }),
-  white: std({ color: C('#fff6fb'), metalness: 0.1, roughness: 0.3, envMapIntensity: 1.1 }),
-  pink: std({ color: C('#ff9fcb'), metalness: 0.2, roughness: 0.4 }),
-  chrome: std({ color: C('#f4f0ff'), metalness: 1, roughness: 0.15, envMapIntensity: 1.5 }),
+  metal: std({ color: C('#2c2839'), metalness: 0.85, roughness: 0.34, envMapIntensity: 1.3 }),
+  poly: std({ color: C('#27222f'), metalness: 0.1, roughness: 0.56, envMapIntensity: 0.9 }),
+  dark: std({ color: C('#110f17'), roughness: 0.7, envMapIntensity: 0.5 }),
+  rubber: std({ color: C('#1e1b29'), roughness: 0.9, envMapIntensity: 0.5 }),
+  lilac: phys({ color: C('#b29af4'), metalness: 0.4, roughness: 0.3, clearcoat: 0.7, clearcoatRoughness: 0.22, envMapIntensity: 1.2 }),
+  mint: phys({ color: C('#8fe8cf'), metalness: 0.35, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.22, envMapIntensity: 1.2 }),
+  sky: phys({ color: C('#a9ccff'), metalness: 0.45, roughness: 0.28, clearcoat: 0.7, clearcoatRoughness: 0.2, envMapIntensity: 1.25 }),
+  white: phys({ color: C('#fff6fb'), metalness: 0.1, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.25, envMapIntensity: 1.1 }),
+  pink: std({ color: C('#ff9fcb'), metalness: 0.25, roughness: 0.38, envMapIntensity: 1.0 }),
+  chrome: std({ color: C('#f4f0ff'), metalness: 1, roughness: 0.14, envMapIntensity: 1.6 }),
   neon: new THREE.MeshBasicMaterial({ color: HDR('#ff8fd0', 3.5) }),
   neon2: new THREE.MeshBasicMaterial({ color: HDR('#8ff6ff', 3) }),
   lens: new THREE.MeshBasicMaterial({ color: HDR('#ff8fd0', 1.6) }),
-  glove: std({ color: C('#f6b2cf'), roughness: 0.75, envMapIntensity: 0.8 }),
-  sleeve: std({ color: C('#a092e6'), roughness: 0.9, envMapIntensity: 0.7 }),
-  cuff: std({ color: C('#fff1f7'), roughness: 0.9 }),
-  glass: new THREE.MeshBasicMaterial({ color: C('#c9fff6'), transparent: true, opacity: 0.14, depthWrite: false }),
+  glove: std({ color: C('#f6b2cf'), roughness: 0.78, envMapIntensity: 0.7, normalMap: T.fabric.userData.n, normalScale: new THREE.Vector2(0.5, 0.5) }),
+  pad: std({ color: C('#3a3350'), roughness: 0.6, envMapIntensity: 0.8 }),
+  sleeve: std({ color: C('#a092e6'), roughness: 0.95, envMapIntensity: 0.6, map: T.fabric, normalMap: T.fabric.userData.n }),
+  cuff: std({ color: C('#fff1f7'), roughness: 0.9, map: T.fabric, normalMap: T.fabric.userData.n }),
+  glass: std({ color: C('#bfefff'), metalness: 0.9, roughness: 0.05, transparent: true, opacity: 0.2, envMapIntensity: 2.2, depthWrite: false }),
   reticle: new THREE.MeshBasicMaterial({ map: T.reticle, color: HDR('#ff6fb8', 4), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   display: new THREE.MeshBasicMaterial({ map: T.ammo, color: HDR('#ffffff', 1.6), transparent: true }),
   coil: new THREE.MeshBasicMaterial({ color: HDR('#ff7fe0', 4) }),
   crystal: new THREE.MeshBasicMaterial({ color: HDR('#bffcff', 6) }),
   tube: new THREE.MeshBasicMaterial({ color: HDR('#ff8fd0', 2.5), transparent: true, opacity: 0.85 })
 };
+const ARM_MATS = [GM.glove, GM.pad, GM.sleeve, GM.cuff];
 const flashMat = new THREE.MeshBasicMaterial({ map: T.flash, color: HDR('#ffd9e8', 6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-function capsuleBetween(parent, a, b, r, mat) { const dir = new V3().subVectors(b, a), len = dir.length(); const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), mat); m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(UP, dir.normalize()); parent.add(m); return m; }
-function makeArms(g, leftZ, leftY, rightZ) {
-  capsuleBetween(g, new V3(0.03, -0.14, rightZ + 0.07), new V3(0.15, -0.36, 0.6), 0.046, GM.sleeve);
-  capsuleBetween(g, new V3(0.02, -0.13, rightZ + 0.05), new V3(0.04, -0.17, rightZ + 0.14), 0.05, GM.cuff);
-  const hr = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.085, 0.085), GM.glove); hr.position.set(0.008, -0.1, rightZ); hr.rotation.x = -0.3; g.add(hr);
-  capsuleBetween(g, new V3(-0.02, leftY - 0.035, leftZ + 0.03), new V3(-0.26, -0.36, 0.08), 0.048, GM.sleeve);
-  capsuleBetween(g, new V3(-0.025, leftY - 0.025, leftZ + 0.02), new V3(-0.07, leftY - 0.075, leftZ + 0.09), 0.052, GM.cuff);
-  const hl = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.085), GM.glove); hl.position.set(-0.012, leftY, leftZ); g.add(hl);
+/* boîte aux arêtes adoucies : c'est sur ces chanfreins que la lumière accroche, comme sur une vraie pièce usinée.
+   Les pièces trop fines restent de simples boîtes. */
+function rbox(w, h, d, r) {
+  const hw = w / 2, hh = h / 2, hd = d / 2, mn = Math.min(w, h, d);
+  if (mn < 0.012) return new THREE.BoxGeometry(w, h, d);
+  r = Math.min(r === undefined ? 0.006 : r, mn * 0.3);
+  const g = new THREE.BoxGeometry(w, h, d, 4, 4, 4), p = g.attributes.position, n = g.attributes.normal, v = new V3(), q = new V3();
+  const snap = (c, half) => { const t = c / half; return Math.abs(t) > 0.75 ? Math.sign(t) * half : Math.abs(t) > 0.25 ? Math.sign(t) * (half - r) : 0; };
+  for (let i = 0; i < p.count; i++) {
+    v.set(snap(p.getX(i), hw), snap(p.getY(i), hh), snap(p.getZ(i), hd));
+    q.set(clamp(v.x, -hw + r, hw - r), clamp(v.y, -hh + r, hh - r), clamp(v.z, -hd + r, hd - r));
+    v.sub(q).normalize(); n.setXYZ(i, v.x, v.y, v.z); p.setXYZ(i, q.x + v.x * r, q.y + v.y * r, q.z + v.z * r);
+  }
+  return g;
 }
-function gp(g, geo, mat, x, y, z, rx, ry, rz) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, rz || 0); g.add(m); return m; }
+const cylN = (r0, r1, h, n) => new THREE.CylinderGeometry(r0, r1, h, n || 14);
+/* assembleur : toutes les pièces fixes d'une arme sont soudées en une maille par matière (peu d'appels de dessin) */
+const _ge = new THREE.Euler(), _gq = new THREE.Quaternion(), _g1 = new V3(1, 1, 1);
+function gunKit(root) {
+  const lists = new Map();
+  const add = (geo, mat, x, y, z, rx, ry, rz) => {
+    const m = new THREE.Matrix4().compose(new V3(x || 0, y || 0, z || 0), _gq.setFromEuler(_ge.set(rx || 0, ry || 0, rz || 0)), _g1);
+    let l = lists.get(mat); if (!l) lists.set(mat, l = []);
+    l.push(prepGeo(geo, m)); geo.dispose();
+  };
+  // capsule entre deux points (doigts, manches)
+  const cap = (a, b, r, mat, seg) => {
+    const A = new V3(a[0], a[1], a[2]), Bv = new V3(b[0], b[1], b[2]), dir = new V3().subVectors(Bv, A), len = dir.length();
+    const m = new THREE.Matrix4().compose(A.add(Bv).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(UP, dir.normalize()), _g1);
+    let l = lists.get(mat); if (!l) lists.set(mat, l = []);
+    const geo = new THREE.CapsuleGeometry(r, len, 5, seg || 10); l.push(prepGeo(geo, m)); geo.dispose();
+  };
+  const done = () => { for (const [mat, l] of lists) { const mesh = new THREE.Mesh(mergeGeos(l), mat); root.add(mesh); l.forEach((x) => x.dispose()); } lists.clear(); };
+  return { add, cap, done };
+}
+/* bras et mains : manches de toile à plis, poignets élastiques, gants avec leurs doigts refermés sur l'arme */
+function makeArms(g, leftZ, leftY, rightZ) {
+  const K = gunKit(g), S = GM.sleeve, GL = GM.glove;
+  // --- bras droit, qui tient la poignée
+  K.cap([0.032, -0.15, rightZ + 0.085], [0.15, -0.36, 0.6], 0.047, S, 14);
+  K.cap([0.062, -0.205, rightZ + 0.22], [0.068, -0.215, rightZ + 0.245], 0.0505, S, 14);       // plis de la manche
+  K.cap([0.098, -0.268, rightZ + 0.37], [0.104, -0.278, rightZ + 0.395], 0.0515, S, 14);
+  K.cap([0.022, -0.132, rightZ + 0.05], [0.04, -0.166, rightZ + 0.125], 0.0505, GM.cuff, 14);
+  K.cap([0.018, -0.118, rightZ + 0.03], [0.022, -0.128, rightZ + 0.05], 0.041, GL);              // poignet du gant
+  {
+    // repère de la poignée : inclinée vers l'arrière, la main l'entoure par la droite
+    const c = Math.cos(-0.3), s = Math.sin(-0.3), oy = -0.098, oz = rightZ;
+    const P3 = (x, y, z) => [x, oy + y * c - z * s, oz + y * s + z * c];
+    K.add(rbox(0.026, 0.088, 0.074, 0.01), GL, ...P3(0.033, 0.004, 0.012), -0.3, 0.12, 0);     // dos de la main
+    K.add(rbox(0.012, 0.05, 0.05, 0.004), GM.pad, ...P3(0.0465, 0.01, 0.012), -0.3, 0.12, 0);  // renfort du dos
+    for (let i = 0; i < 3; i++) {                                                               // majeur, annulaire, auriculaire
+      const y = 0.016 - i * 0.0235;
+      K.cap(P3(0.03, y, -0.03), P3(-0.02, y - 0.002, -0.036), 0.0112, GL);
+      K.cap(P3(-0.026, y - 0.002, -0.032), P3(-0.027, y - 0.003, -0.004), 0.0105, GL);
+      K.add(new THREE.SphereGeometry(0.0125, 10, 8), GM.pad, ...P3(0.034, y + 0.002, -0.024));  // phalanges renforcées
+    }
+    K.cap(P3(0.033, 0.058, -0.018), P3(0.036, 0.066, -0.072), 0.0108, GL);                      // index allongé le long du boîtier
+    K.cap(P3(0.036, 0.066, -0.072), P3(0.034, 0.064, -0.096), 0.0102, GL);
+    K.cap(P3(0.0, 0.058, 0.034), P3(-0.028, 0.062, -0.012), 0.0118, GL);                        // pouce, côté gauche
+    K.add(new THREE.SphereGeometry(0.02, 12, 10), GL, ...P3(0.008, 0.046, 0.03));               // creux entre pouce et index
+    K.cap(P3(0.012, -0.03, 0.03), P3(0.014, 0.03, 0.036), 0.021, GL);                           // paume, derrière la poignée
+  }
+  // --- bras gauche, qui soutient le garde-main
+  K.cap([-0.024, leftY - 0.04, leftZ + 0.04], [-0.26, -0.36, 0.08], 0.048, S, 14);
+  K.cap([-0.09, leftY - 0.125, leftZ + 0.053], [-0.108, leftY - 0.15, leftZ + 0.056], 0.0518, S, 14);
+  K.cap([-0.165, -0.255, 0.068], [-0.183, -0.277, 0.071], 0.0525, S, 14);
+  K.cap([-0.027, leftY - 0.028, leftZ + 0.022], [-0.07, leftY - 0.076, leftZ + 0.088], 0.052, GM.cuff, 14);
+  K.cap([-0.016, leftY - 0.012, leftZ + 0.012], [-0.026, leftY - 0.026, leftZ + 0.022], 0.042, GL);
+  K.add(rbox(0.078, 0.06, 0.09, 0.016), GL, -0.008, leftY + 0.008, leftZ, 0, 0, 0.1);           // paume en coupe sous l'arme
+  K.add(rbox(0.05, 0.012, 0.06, 0.004), GM.pad, -0.012, leftY - 0.023, leftZ, 0, 0, 0.1);
+  for (let i = 0; i < 4; i++) {                                                                 // quatre doigts qui remontent à droite
+    const z = leftZ - 0.034 + i * 0.0225;
+    K.cap([0.02, leftY - 0.004, z], [0.038, leftY + 0.012, z], 0.0112, GL);
+    K.cap([0.039, leftY + 0.014, z], [0.036, leftY + 0.072, z + 0.002], 0.0106, GL);
+    K.add(new THREE.SphereGeometry(0.0122, 10, 8), GM.pad, 0.041, leftY + 0.013, z);
+  }
+  K.cap([-0.042, leftY + 0.012, leftZ + 0.03], [-0.041, leftY + 0.052, leftZ - 0.02], 0.0118, GL); // pouce, à gauche, vers l'avant
+  K.done();
+}
+function gp(g, geo, mat, x, y, z, rx, ry, rz) { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); m.rotation.set(rx || 0, ry || 0, rz || 0); g.add(m); return m; }
 function addFlash(g, z, size) {
   const flash = new THREE.Group(); flash.position.set(0, 0.004, z); g.add(flash);
   const s = size || 1;
@@ -50,101 +125,170 @@ function addFlash(g, z, size) {
   const c = new THREE.Mesh(new THREE.PlaneGeometry(0.1 * s, 0.32 * s), flashMat); c.rotation.set(Math.PI / 2, Math.PI / 2, 0); c.position.z = -0.1 * s; flash.add(c);
   flash.visible = false; return flash;
 }
+// chargeur : un groupe à part (il sort et rentre au rechargement), ses pièces soudées par matière
+function magGroup(g, x, y, z, rx, build) { const m = new THREE.Group(); m.position.set(x, y, z); m.rotation.x = rx || 0; g.add(m); const K = gunKit(m); build(K); K.done(); return m; }
 function buildModels() {
-  const models = [];
+  const models = [], HP = Math.PI / 2;
   { // BRISE-RÊVE
-    const g = new THREE.Group();
-    gp(g, new THREE.BoxGeometry(0.066, 0.086, 0.36), GM.metal, 0, 0, 0);
-    gp(g, new THREE.BoxGeometry(0.034, 0.01, 0.3), GM.poly, 0, 0.048, -0.02);
-    gp(g, new THREE.BoxGeometry(0.06, 0.072, 0.2), GM.lilac, 0, -0.004, -0.27);
-    for (let i = 0; i < 4; i++) for (const s of [-1, 1]) gp(g, new THREE.BoxGeometry(0.004, 0.022, 0.03), GM.poly, s * 0.031, 0.006, -0.33 + i * 0.04);
-    gp(g, new THREE.CylinderGeometry(0.011, 0.011, 0.14, 12), GM.metal, 0, 0.004, -0.43, Math.PI / 2);
-    gp(g, new THREE.CylinderGeometry(0.02, 0.02, 0.065, 14), GM.poly, 0, 0.004, -0.52, Math.PI / 2);
-    gp(g, new THREE.CylinderGeometry(0.022, 0.022, 0.012, 14), GM.pink, 0, 0.004, -0.49, Math.PI / 2);
-    const mag = gp(g, new THREE.BoxGeometry(0.038, 0.19, 0.075), GM.poly, 0, -0.13, -0.09, 0.12);
-    gp(mag, new THREE.BoxGeometry(0.044, 0.02, 0.085), GM.pink, 0, -0.095, 0);
-    gp(g, new THREE.BoxGeometry(0.04, 0.125, 0.05), GM.poly, 0, -0.098, 0.1, -0.3);
-    gp(g, new THREE.BoxGeometry(0.009, 0.009, 0.08), GM.metal, 0, -0.065, 0.045);
-    gp(g, new THREE.BoxGeometry(0.036, 0.052, 0.21), GM.lilac, 0, -0.006, 0.28);
-    gp(g, new THREE.BoxGeometry(0.046, 0.115, 0.032), GM.poly, 0, -0.022, 0.39);
-    gp(g, new THREE.CylinderGeometry(0.017, 0.015, 0.1, 12), GM.poly, 0, -0.085, -0.28);
-    gp(g, new THREE.BoxGeometry(0.044, 0.042, 0.08), GM.metal, 0, 0.074, -0.04);
-    gp(g, new THREE.BoxGeometry(0.072, 0.01, 0.062), GM.lilac, 0, 0.099, -0.05);
-    for (const s of [-1, 1]) gp(g, new THREE.BoxGeometry(0.006, 0.068, 0.062), GM.metal, s * 0.038, 0.137, -0.05);
-    gp(g, new THREE.BoxGeometry(0.082, 0.007, 0.062), GM.metal, 0, 0.174, -0.05);
+    const g = new THREE.Group(), K = gunKit(g), A = K.add;
+    // carcasse : boîtier bas, boîtier haut plus étroit, rail cranté
+    A(rbox(0.066, 0.07, 0.36, 0.009), GM.metal, 0, -0.008, 0);
+    A(rbox(0.054, 0.032, 0.345, 0.008), GM.metal, 0, 0.033, -0.004);
+    A(rbox(0.03, 0.009, 0.3, 0.002), GM.poly, 0, 0.0515, -0.02);
+    for (let i = 0; i < 14; i++) A(new THREE.BoxGeometry(0.034, 0.0065, 0.011), GM.poly, 0, 0.058, -0.166 + i * 0.022);
+    // fenêtre d'éjection et culasse chromée (à droite), levier d'armement (à gauche), vis
+    A(new THREE.BoxGeometry(0.004, 0.024, 0.07), GM.dark, 0.0318, 0.014, -0.02);
+    A(new THREE.BoxGeometry(0.004, 0.015, 0.048), GM.chrome, 0.0326, 0.014, -0.012);
+    A(rbox(0.014, 0.012, 0.03, 0.004), GM.poly, -0.036, 0.032, 0.09);
+    for (const [y, z] of [[-0.03, -0.155], [-0.03, 0.155], [0.012, 0.155]]) for (const s of [-1, 1]) A(cylN(0.0045, 0.0045, 0.003, 10), GM.chrome, s * 0.0335, y, z, 0, 0, HP);
+    // garde-main ajouré, bague avant
+    A(rbox(0.06, 0.07, 0.2, 0.011), GM.lilac, 0, -0.004, -0.27);
+    A(rbox(0.046, 0.012, 0.18, 0.004), GM.poly, 0, 0.034, -0.27);
+    for (let i = 0; i < 4; i++) for (const s of [-1, 1]) A(new THREE.BoxGeometry(0.004, 0.02, 0.03), GM.dark, s * 0.0302, 0.006, -0.33 + i * 0.04);
+    A(rbox(0.064, 0.074, 0.016, 0.005), GM.metal, 0, -0.004, -0.367);
+    // canon et frein de bouche
+    A(cylN(0.0115, 0.0115, 0.14), GM.metal, 0, 0.004, -0.43, HP);
+    A(cylN(0.021, 0.019, 0.07, 16), GM.poly, 0, 0.004, -0.52, HP);
+    for (let i = 0; i < 3; i++) A(new THREE.BoxGeometry(0.046, 0.006, 0.008), GM.dark, 0, 0.004, -0.502 - i * 0.016);
+    A(cylN(0.0225, 0.0225, 0.01, 16), GM.pink, 0, 0.004, -0.482, HP);
+    A(cylN(0.009, 0.009, 0.002, 12), GM.dark, 0, 0.004, -0.5555, HP);
+    // puits de chargeur, poignée striée, pontet, détente
+    A(rbox(0.05, 0.03, 0.092, 0.006), GM.metal, 0, -0.05, -0.088, 0.12);
+    A(rbox(0.04, 0.125, 0.05, 0.012), GM.rubber, 0, -0.098, 0.1, -0.3);
+    A(new THREE.BoxGeometry(0.01, 0.008, 0.085), GM.metal, 0, -0.078, 0.036);
+    A(new THREE.BoxGeometry(0.01, 0.034, 0.008), GM.metal, 0, -0.062, -0.006);
+    A(rbox(0.007, 0.026, 0.009, 0.003), GM.chrome, 0, -0.058, 0.05, 0.25);
+    // crosse évidée : deux longerons, appui-joue, plaque de couche
+    A(rbox(0.03, 0.022, 0.23, 0.007), GM.lilac, 0, 0.012, 0.29);
+    A(rbox(0.026, 0.016, 0.2, 0.006), GM.lilac, 0, -0.04, 0.3, 0.16);
+    A(rbox(0.034, 0.03, 0.09, 0.008), GM.poly, 0, 0.03, 0.3);
+    A(rbox(0.046, 0.115, 0.034, 0.012), GM.rubber, 0, -0.022, 0.395);
+    // poignée avant
+    A(cylN(0.0175, 0.015, 0.1), GM.rubber, 0, -0.085, -0.28);
+    A(cylN(0.019, 0.019, 0.012), GM.poly, 0, -0.04, -0.28);
+    A(cylN(0.017, 0.017, 0.008), GM.pink, 0, -0.136, -0.28);
+    // viseur holographique : embase, capot, verre, réticule
+    A(rbox(0.044, 0.03, 0.085, 0.006), GM.metal, 0, 0.076, -0.04);
+    A(new THREE.BoxGeometry(0.05, 0.009, 0.02), GM.poly, 0, 0.064, -0.066);
+    A(rbox(0.072, 0.012, 0.064, 0.004), GM.lilac, 0, 0.099, -0.05);
+    for (const s of [-1, 1]) A(rbox(0.007, 0.072, 0.064, 0.003), GM.metal, s * 0.038, 0.137, -0.05);
+    A(rbox(0.083, 0.008, 0.064, 0.003), GM.metal, 0, 0.175, -0.05);
+    for (const s of [-1, 1]) A(cylN(0.005, 0.005, 0.005, 10), GM.chrome, s * 0.0425, 0.11, -0.03, 0, 0, HP);
+    // gorges des bandes lumineuses, cadre de l'écran
+    for (const s of [-1, 1]) A(new THREE.BoxGeometry(0.002, 0.013, 0.232), GM.dark, s * 0.0328, -0.016, -0.03);
+    A(new THREE.BoxGeometry(0.004, 0.04, 0.072), GM.dark, -0.0335, 0.012, 0.11);
+    K.done();
     gp(g, new THREE.PlaneGeometry(0.07, 0.066), GM.glass, 0, 0.137, -0.05);
     gp(g, new THREE.PlaneGeometry(0.03, 0.03), GM.reticle, 0, 0.137, -0.051);
-    const nl = gp(g, new THREE.BoxGeometry(0.003, 0.007, 0.22), GM.neon, -0.0345, -0.016, -0.03);
-    const nr = gp(g, new THREE.BoxGeometry(0.003, 0.007, 0.22), GM.neon2, 0.0345, -0.016, -0.03);
-    gp(g, new THREE.PlaneGeometry(0.06, 0.03), GM.display, -0.0345, 0.012, 0.11, 0, -Math.PI / 2, 0);
+    const mag = magGroup(g, 0, -0.13, -0.09, 0.12, (M) => {
+      M.add(rbox(0.038, 0.19, 0.075, 0.007), GM.poly);
+      for (let i = 0; i < 4; i++) for (const s of [-1, 1]) M.add(new THREE.BoxGeometry(0.003, 0.006, 0.062), GM.dark, s * 0.0195, 0.04 - i * 0.034, 0);
+      M.add(rbox(0.045, 0.022, 0.086, 0.006), GM.pink, 0, -0.096, 0);
+    });
+    const nl = gp(g, new THREE.BoxGeometry(0.0035, 0.007, 0.22), GM.neon, -0.0345, -0.016, -0.03);
+    const nr = gp(g, new THREE.BoxGeometry(0.0035, 0.007, 0.22), GM.neon2, 0.0345, -0.016, -0.03);
+    gp(g, new THREE.PlaneGeometry(0.06, 0.03), GM.display, -0.0358, 0.012, 0.11, 0, -Math.PI / 2, 0);
     makeArms(g, -0.28, -0.105, 0.1);
     models.push({ g, muzzleZ: -0.56, eject: new V3(0.036, 0.016, -0.02), mag, magHome: mag.position.clone(), neon: [nl, nr], flash: addFlash(g, -0.56), adsY: -0.137, sightZ: -0.05 });
   }
   { // CASSETTE
-    const g = new THREE.Group();
-    gp(g, new THREE.BoxGeometry(0.072, 0.1, 0.42), GM.mint, 0, 0, 0);
-    gp(g, new THREE.BoxGeometry(0.074, 0.03, 0.42), GM.metal, 0, 0.058, 0);
-    gp(g, new THREE.BoxGeometry(0.066, 0.08, 0.26), GM.poly, 0, -0.008, -0.32);
-    gp(g, new THREE.CylinderGeometry(0.014, 0.014, 0.26, 12), GM.metal, 0, 0.01, -0.55, Math.PI / 2);
-    gp(g, new THREE.BoxGeometry(0.05, 0.05, 0.09), GM.metal, 0, 0.01, -0.7);
-    for (let i = 0; i < 3; i++) gp(g, new THREE.BoxGeometry(0.052, 0.008, 0.012), GM.pink, 0, 0.037, -0.67 + i * 0.03);
-    const mag = gp(g, new THREE.BoxGeometry(0.044, 0.17, 0.085), GM.poly, 0, -0.13, -0.08, 0.28);
-    gp(mag, new THREE.BoxGeometry(0.046, 0.08, 0.087), GM.poly, 0, -0.1, -0.03, 0.25);
+    const g = new THREE.Group(), K = gunKit(g), A = K.add;
+    A(rbox(0.072, 0.1, 0.42, 0.012), GM.mint, 0, 0, 0);
+    A(rbox(0.074, 0.03, 0.42, 0.008), GM.metal, 0, 0.058, 0);
+    for (let i = 0; i < 16; i++) A(new THREE.BoxGeometry(0.036, 0.006, 0.011), GM.poly, 0, 0.076, -0.17 + i * 0.022);
+    A(rbox(0.066, 0.08, 0.26, 0.01), GM.poly, 0, -0.008, -0.32);
+    for (let i = 0; i < 5; i++) for (const s of [-1, 1]) A(new THREE.BoxGeometry(0.004, 0.012, 0.03), GM.dark, s * 0.0332, 0.0, -0.42 + i * 0.045);
+    A(cylN(0.014, 0.014, 0.26), GM.metal, 0, 0.01, -0.55, HP);
+    A(rbox(0.05, 0.05, 0.09, 0.008), GM.metal, 0, 0.01, -0.7);
+    for (let i = 0; i < 3; i++) A(new THREE.BoxGeometry(0.052, 0.008, 0.012), GM.pink, 0, 0.037, -0.67 + i * 0.03);
+    A(cylN(0.01, 0.01, 0.002, 12), GM.dark, 0, 0.01, -0.7455, HP);
+    A(new THREE.BoxGeometry(0.004, 0.026, 0.08), GM.dark, 0.0345, 0.02, -0.03);
+    A(new THREE.BoxGeometry(0.004, 0.016, 0.055), GM.chrome, 0.0353, 0.02, -0.02);
+    for (const [y, z] of [[-0.035, -0.18], [-0.035, 0.18], [0.03, 0.18], [0.03, -0.18]]) for (const s of [-1, 1]) A(cylN(0.005, 0.005, 0.003, 10), GM.chrome, s * 0.0365, y, z, 0, 0, HP);
     // la cassette sur le côté
-    const cas = new THREE.Group(); cas.position.set(-0.038, 0.0, 0.02); cas.rotation.y = -Math.PI / 2; g.add(cas);
-    gp(cas, new THREE.BoxGeometry(0.12, 0.07, 0.008), GM.white, 0, 0, 0);
-    gp(cas, new THREE.BoxGeometry(0.08, 0.026, 0.009), GM.pink, 0, 0.012, 0.001);
-    for (const sx of [-0.024, 0.024]) gp(cas, new THREE.CylinderGeometry(0.01, 0.01, 0.01, 10), GM.poly, sx, -0.012, 0.002, Math.PI / 2);
-    gp(g, new THREE.BoxGeometry(0.045, 0.13, 0.05), GM.poly, 0, -0.1, 0.12, -0.3);
-    gp(g, new THREE.BoxGeometry(0.05, 0.08, 0.24), GM.mint, 0, -0.01, 0.32);
-    gp(g, new THREE.BoxGeometry(0.056, 0.12, 0.04), GM.poly, 0, -0.03, 0.45);
-    gp(g, new THREE.BoxGeometry(0.012, 0.03, 0.012), GM.metal, 0, 0.088, -0.3);
-    gp(g, new THREE.BoxGeometry(0.03, 0.022, 0.012), GM.metal, 0, 0.083, 0.12);
-    const nl = gp(g, new THREE.BoxGeometry(0.003, 0.008, 0.3), GM.neon2, 0.037, -0.02, -0.05);
-    const nr = gp(g, new THREE.BoxGeometry(0.003, 0.008, 0.3), GM.neon, -0.037, -0.035, -0.05);
-    gp(g, new THREE.PlaneGeometry(0.06, 0.03), GM.display, 0.0375, 0.025, 0.14, 0, Math.PI / 2, 0);
+    { const cx = -0.038, P = (x, y, z) => [cx - z, y, 0.02 + x];
+      A(rbox(0.008, 0.07, 0.12, 0.002), GM.white, ...P(0, 0, 0));
+      A(new THREE.BoxGeometry(0.009, 0.026, 0.08), GM.pink, ...P(0, 0.012, 0.001));
+      for (const sx of [-0.024, 0.024]) A(cylN(0.01, 0.01, 0.01, 10), GM.poly, ...P(sx, -0.012, 0.002), 0, 0, HP); }
+    A(rbox(0.045, 0.13, 0.05, 0.012), GM.rubber, 0, -0.1, 0.12, -0.3);
+    A(new THREE.BoxGeometry(0.01, 0.008, 0.1), GM.metal, 0, -0.082, 0.045);
+    A(rbox(0.007, 0.026, 0.009, 0.003), GM.chrome, 0, -0.064, 0.062, 0.25);
+    A(rbox(0.05, 0.08, 0.24, 0.012), GM.mint, 0, -0.01, 0.32);
+    A(rbox(0.056, 0.12, 0.04, 0.012), GM.rubber, 0, -0.03, 0.45);
+    A(new THREE.BoxGeometry(0.012, 0.03, 0.012), GM.metal, 0, 0.088, -0.3);
+    A(new THREE.BoxGeometry(0.03, 0.022, 0.012), GM.metal, 0, 0.083, 0.12);
+    A(new THREE.BoxGeometry(0.002, 0.014, 0.312), GM.dark, 0.0355, -0.02, -0.05);
+    A(new THREE.BoxGeometry(0.002, 0.014, 0.312), GM.dark, -0.0355, -0.035, -0.05);
+    A(new THREE.BoxGeometry(0.004, 0.04, 0.072), GM.dark, 0.0362, 0.025, 0.14);
+    K.done();
+    const mag = magGroup(g, 0, -0.13, -0.08, 0.28, (M) => {
+      M.add(rbox(0.044, 0.17, 0.085, 0.008), GM.poly);
+      M.add(rbox(0.046, 0.08, 0.087, 0.008), GM.poly, 0, -0.1, -0.03, 0.25);
+      for (let i = 0; i < 3; i++) for (const s of [-1, 1]) M.add(new THREE.BoxGeometry(0.003, 0.006, 0.07), GM.dark, s * 0.0225, 0.04 - i * 0.036, 0);
+    });
+    const nl = gp(g, new THREE.BoxGeometry(0.0035, 0.008, 0.3), GM.neon2, 0.037, -0.02, -0.05);
+    const nr = gp(g, new THREE.BoxGeometry(0.0035, 0.008, 0.3), GM.neon, -0.037, -0.035, -0.05);
+    gp(g, new THREE.PlaneGeometry(0.06, 0.03), GM.display, 0.0385, 0.025, 0.14, 0, Math.PI / 2, 0);
     makeArms(g, -0.33, -0.1, 0.12);
     models.push({ g, muzzleZ: -0.76, eject: new V3(0.04, 0.02, -0.04), mag, magHome: mag.position.clone(), neon: [nl, nr], flash: addFlash(g, -0.76, 1.3), adsY: -0.098, sightZ: 0.12 });
   }
   { // LONGUE-VUE
-    const g = new THREE.Group();
-    gp(g, new THREE.BoxGeometry(0.07, 0.09, 0.36), GM.sky, 0, 0, 0);
-    gp(g, new THREE.CylinderGeometry(0.016, 0.018, 0.72, 14), GM.chrome, 0, 0.01, -0.54, Math.PI / 2);
-    gp(g, new THREE.CylinderGeometry(0.028, 0.028, 0.08, 14), GM.metal, 0, 0.01, -0.92, Math.PI / 2);
-    gp(g, new THREE.BoxGeometry(0.06, 0.06, 0.3), GM.white, 0, -0.01, -0.3);
-    // lunette
-    gp(g, new THREE.CylinderGeometry(0.028, 0.028, 0.3, 16), GM.metal, 0, 0.1, -0.06, Math.PI / 2);
-    gp(g, new THREE.CylinderGeometry(0.038, 0.03, 0.07, 16), GM.metal, 0, 0.1, -0.24, Math.PI / 2);
-    gp(g, new THREE.CylinderGeometry(0.034, 0.028, 0.05, 16), GM.metal, 0, 0.1, 0.11, Math.PI / 2);
+    const g = new THREE.Group(), K = gunKit(g), A = K.add;
+    A(rbox(0.07, 0.09, 0.36, 0.012), GM.sky, 0, 0, 0);
+    A(cylN(0.016, 0.018, 0.72), GM.chrome, 0, 0.01, -0.54, HP);
+    A(cylN(0.028, 0.028, 0.08), GM.metal, 0, 0.01, -0.92, HP);
+    for (let i = 0; i < 3; i++) A(new THREE.BoxGeometry(0.06, 0.007, 0.01), GM.dark, 0, 0.01, -0.9 - i * 0.02);
+    A(cylN(0.012, 0.012, 0.002, 12), GM.dark, 0, 0.01, -0.9605, HP);
+    A(rbox(0.06, 0.06, 0.3, 0.01), GM.white, 0, -0.01, -0.3);
+    for (let i = 0; i < 5; i++) for (const s of [-1, 1]) A(new THREE.BoxGeometry(0.004, 0.012, 0.032), GM.dark, s * 0.0302, -0.006, -0.41 + i * 0.05);
+    // lunette : tube, bonnette, tourelles de réglage, colliers
+    A(cylN(0.028, 0.028, 0.3, 18), GM.metal, 0, 0.1, -0.06, HP);
+    A(cylN(0.038, 0.03, 0.07, 18), GM.metal, 0, 0.1, -0.24, HP);
+    A(cylN(0.034, 0.028, 0.05, 18), GM.metal, 0, 0.1, 0.11, HP);
+    A(cylN(0.04, 0.04, 0.012, 18), GM.rubber, 0, 0.1, 0.138, HP);
+    A(cylN(0.014, 0.014, 0.022, 12), GM.poly, 0, 0.135, -0.06);
+    A(cylN(0.016, 0.016, 0.006, 12), GM.chrome, 0, 0.148, -0.06);
+    for (const z of [-0.12, 0.02]) { A(rbox(0.03, 0.06, 0.02, 0.004), GM.metal, 0, 0.065, z); A(cylN(0.031, 0.031, 0.016, 18), GM.poly, 0, 0.1, z, HP); }
+    A(cylN(0.03, 0.03, 0.02, 12), GM.pink, 0.032, 0.1, -0.06, 0, 0, HP);
+    A(rbox(0.045, 0.13, 0.05, 0.012), GM.rubber, 0, -0.1, 0.13, -0.3);
+    A(new THREE.BoxGeometry(0.01, 0.008, 0.09), GM.metal, 0, -0.07, 0.07);
+    A(rbox(0.007, 0.026, 0.009, 0.003), GM.chrome, 0, -0.054, 0.082, 0.25);
+    A(cylN(0.008, 0.008, 0.05, 8), GM.chrome, 0.05, 0.02, 0.06, 0, 0, HP);
+    A(new THREE.SphereGeometry(0.014, 10, 8), GM.pink, 0.078, 0.02, 0.06);
+    A(rbox(0.03, 0.1, 0.3, 0.01), GM.sky, 0, -0.03, 0.34);
+    A(rbox(0.034, 0.03, 0.12, 0.008), GM.poly, 0, 0.032, 0.33);
+    A(rbox(0.05, 0.14, 0.04, 0.012), GM.rubber, 0, -0.05, 0.5);
+    A(new THREE.BoxGeometry(0.004, 0.04, 0.072), GM.dark, 0.0338, -0.015, 0.1);
+    for (const [y, z] of [[-0.03, -0.15], [-0.03, 0.15], [0.03, 0.15]]) for (const s of [-1, 1]) A(cylN(0.0045, 0.0045, 0.003, 10), GM.chrome, s * 0.0355, y, z, 0, 0, HP);
+    K.done();
     gp(g, new THREE.CircleGeometry(0.034, 20), GM.lens, 0, 0.1, -0.276, 0, Math.PI, 0);
-    gp(g, new THREE.CircleGeometry(0.026, 20), GM.lens, 0, 0.1, 0.137, 0, 0, 0);
-    for (const z of [-0.12, 0.02]) gp(g, new THREE.BoxGeometry(0.03, 0.06, 0.02), GM.metal, 0, 0.065, z);
-    gp(g, new THREE.CylinderGeometry(0.03, 0.03, 0.02, 12), GM.pink, 0.032, 0.1, -0.06, 0, 0, Math.PI / 2);
-    const mag = gp(g, new THREE.BoxGeometry(0.04, 0.08, 0.08), GM.poly, 0, -0.08, -0.04);
-    gp(g, new THREE.BoxGeometry(0.045, 0.13, 0.05), GM.poly, 0, -0.1, 0.13, -0.3);
-    gp(g, new THREE.CylinderGeometry(0.008, 0.008, 0.05, 8), GM.chrome, 0.05, 0.02, 0.06, 0, 0, Math.PI / 2);
-    gp(g, new THREE.SphereGeometry(0.014, 8, 6), GM.pink, 0.078, 0.02, 0.06);
-    gp(g, new THREE.BoxGeometry(0.03, 0.1, 0.3), GM.sky, 0, -0.03, 0.34);
-    gp(g, new THREE.BoxGeometry(0.05, 0.14, 0.04), GM.white, 0, -0.05, 0.5);
+    gp(g, new THREE.CircleGeometry(0.026, 20), GM.lens, 0, 0.1, 0.1445, 0, 0, 0);
+    const mag = magGroup(g, 0, -0.08, -0.04, 0, (M) => { M.add(rbox(0.04, 0.08, 0.08, 0.008), GM.poly); M.add(rbox(0.044, 0.014, 0.084, 0.004), GM.pink, 0, -0.04, 0); });
     const nl = gp(g, new THREE.BoxGeometry(0.003, 0.006, 0.5), GM.neon, -0.019, 0.01, -0.5);
     const nr = gp(g, new THREE.BoxGeometry(0.003, 0.006, 0.5), GM.neon2, 0.019, 0.01, -0.5);
-    gp(g, new THREE.PlaneGeometry(0.06, 0.03), GM.display, 0.0355, -0.015, 0.1, 0, Math.PI / 2, 0);
+    gp(g, new THREE.PlaneGeometry(0.06, 0.03), GM.display, 0.0362, -0.015, 0.1, 0, Math.PI / 2, 0);
     makeArms(g, -0.34, -0.06, 0.13);
-    models.push({ g, muzzleZ: -0.97, eject: new V3(0.04, 0.03, 0.0), mag, magHome: mag.position.clone(), neon: [nl, nr], flash: addFlash(g, -0.97, 1.6), adsY: -0.1, sightZ: 0.1 });
+    models.push({ g, muzzleZ: -0.97, eject: new V3(0.04, 0.03, 0.0), mag, magHome: mag.position.clone(), neon: [nl, nr], flash: addFlash(g, -0.97, 1.6), adsY: -0.1, sightZ: 0.1, hipY: -0.035 });
   }
   { // RAYON NÉON
-    const g = new THREE.Group();
-    gp(g, new THREE.SphereGeometry(0.06, 16, 12).scale(0.9, 0.8, 1.6), GM.white, 0, 0, -0.06);
-    gp(g, new THREE.CylinderGeometry(0.03, 0.045, 0.2, 16), GM.pink, 0, 0.0, -0.22, Math.PI / 2);
+    const g = new THREE.Group(), K = gunKit(g), A = K.add;
+    A(new THREE.SphereGeometry(0.06, 24, 16).scale(0.9, 0.8, 1.6), GM.white, 0, 0, -0.06);
+    A(cylN(0.03, 0.045, 0.2, 20), GM.pink, 0, 0.0, -0.22, HP);
+    A(cylN(0.047, 0.047, 0.012, 20), GM.chrome, 0, 0.0, -0.125, HP);
+    A(cylN(0.032, 0.032, 0.01, 20), GM.chrome, 0, 0.0, -0.318, HP);
+    A(new THREE.SphereGeometry(0.03, 14, 10), GM.chrome, 0, 0.0, 0.09);
+    A(rbox(0.04, 0.13, 0.05, 0.012), GM.lilac, 0, -0.09, 0.06, -0.35);
+    A(new THREE.TorusGeometry(0.03, 0.006, 6, 14, Math.PI), GM.chrome, 0, -0.06, 0.0, 0, HP, Math.PI);
+    for (const s of [-1, 1]) A(rbox(0.008, 0.04, 0.12, 0.003), GM.sky, s * 0.05, 0.0, -0.05, 0, s * 0.2, 0);
+    for (const s of [-1, 1]) A(cylN(0.006, 0.006, 0.004, 10), GM.chrome, s * 0.055, 0.0, -0.02, 0, 0, HP);
+    A(cylN(0.015, 0.015, 0.012, 12), GM.pink, 0, 0.055, 0.075, HP);
+    A(cylN(0.02, 0.02, 0.012, 12), GM.poly, 0, 0.055, -0.115, HP);
+    K.done();
     const coils = [];
-    for (let i = 0; i < 4; i++) coils.push(gp(g, new THREE.TorusGeometry(0.045 - i * 0.004, 0.008, 8, 20), GM.coil.clone(), 0, 0, -0.16 - i * 0.045));
+    for (let i = 0; i < 4; i++) coils.push(gp(g, new THREE.TorusGeometry(0.045 - i * 0.004, 0.008, 8, 24), GM.coil.clone(), 0, 0, -0.16 - i * 0.045));
     const crystal = gp(g, new THREE.OctahedronGeometry(0.03, 0), GM.crystal, 0, 0, -0.36);
     gp(g, new THREE.CylinderGeometry(0.012, 0.012, 0.18, 10), GM.tube, 0, 0.055, -0.02, Math.PI / 2);
-    gp(g, new THREE.CylinderGeometry(0.018, 0.018, 0.2, 10, 1, true), GM.glass, 0, 0.055, -0.02, Math.PI / 2);
-    gp(g, new THREE.SphereGeometry(0.03, 12, 8), GM.chrome, 0, 0.0, 0.09);
-    gp(g, new THREE.BoxGeometry(0.04, 0.13, 0.05), GM.lilac, 0, -0.09, 0.06, -0.35);
-    gp(g, new THREE.TorusGeometry(0.03, 0.006, 6, 14, Math.PI), GM.chrome, 0, -0.06, 0.0, 0, Math.PI / 2, Math.PI);
-    for (const s of [-1, 1]) gp(g, new THREE.BoxGeometry(0.008, 0.04, 0.12), GM.sky, s * 0.05, 0.0, -0.05, 0, s * 0.2, 0);
+    gp(g, new THREE.CylinderGeometry(0.018, 0.018, 0.2, 14, 1, true), GM.glass, 0, 0.055, -0.02, Math.PI / 2);
     makeArms(g, -0.17, -0.06, 0.06);
     models.push({ g, muzzleZ: -0.38, eject: null, mag: null, neon: [], flash: null, coils, crystal, adsY: -0.06, sightZ: 0.0 });
   }
@@ -163,7 +307,7 @@ function worldMat(m) {
 }
 const WORLD_GUNS = MODELS.map((m) => {
   const g = m.g.clone(true), drop = [];
-  g.traverse((o) => { if (o.isMesh && (o.material === GM.glove || o.material === GM.sleeve || o.material === GM.cuff)) drop.push(o); });
+  g.traverse((o) => { if (o.isMesh && ARM_MATS.includes(o.material)) drop.push(o); });
   drop.forEach((o) => o.parent.remove(o));
   g.traverse((o) => { o.layers.set(0); if (o.isMesh) { o.material = worldMat(o.material); o.castShadow = o.material !== flashMat; } });
   g.visible = true; g.position.set(0, 0, 0); g.rotation.set(0, 0, 0);
@@ -217,6 +361,7 @@ function drawAmmo() {
   $('ammoMax').textContent = w.beam ? '' : '/ ∞';
   $('armes').classList.toggle('vide', low);
   $('energie').hidden = !w.beam; if (w.beam) $('energieBarre').style.transform = 'scaleX(' + (w.energy / 100).toFixed(3) + ')';
+  $('jauge').hidden = !!w.beam; if (!w.beam) $('jaugeBarre').style.transform = 'scaleX(' + (w.ammo / w.mag).toFixed(3) + ')';
 }
 function drawSlots() {
   $('emplacements').innerHTML = WEAPONS.map((w, i) => '<span class="' + (i === WPN.cur ? 'actif' : '') + '">' + (i + 1) + '</span>').join('');
@@ -439,9 +584,9 @@ function updateWeapon(dt, mv) {
   const boltK = WPN.boltT > 0 ? Math.sin((1 - WPN.boltT / 0.35) * Math.PI) : 0;
   const swim = P.swim ? 1 : 0;
   gunRoot.position.set(
-    lerp(0.17, 0, a) + bx - WPN.swx * swayK - sK * 0.03,
-    lerp(-0.225, m.adsY, a) + by + WPN.swy * swayK + py - P.land * 0.04 - sK * 0.05 + Math.sin(clockU.value * 1.3) * 0.002 * (1 - a) - swK * 0.35 - swim * 0.06 + Math.sin(clockU.value * 2.5) * 0.02 * swim,
-    lerp(-0.47, -0.3 - m.sightZ * 0.3, a) + WPN.kz + sK * 0.03
+    lerp(0.185, 0, a) + bx - WPN.swx * swayK - sK * 0.03,
+    lerp(-0.245 + (m.hipY || 0), m.adsY * GUN_SCALE, a) + by + WPN.swy * swayK + py - P.land * 0.04 - sK * 0.05 + Math.sin(clockU.value * 1.3) * 0.002 * (1 - a) - swK * 0.35 - swim * 0.06 + Math.sin(clockU.value * 2.5) * 0.02 * swim,
+    lerp(-0.5, -0.39 - m.sightZ * 0.3, a) + WPN.kz + sK * 0.03
   );
   gunRoot.rotation.set(WPN.krx + rx + sK * -0.35 + WPN.swy * 2 * swayK - swK * 0.6 + boltK * 0.08 + swim * 0.25, lerp(0.035, 0, a) + WPN.kry - WPN.swx * 2 * swayK + sK * 0.55, WPN.krz + rz + bx * 2 + sK * 0.25 + boltK * 0.15);
   gunRoot.visible = !scoped && !P.dead;

@@ -1,0 +1,17 @@
+d.setTimeOfDay(430); const P = d.P; P.pos.set(2, 0.03, -30); P.vel.set(0, 0, 0); P.yaw = 0.1; P.pitch = 0.02; d.step(4, 0.03);
+---
+wait 1200
+---
+shot w_e
+---
+d.setTimeOfDay(215); d.switchWeapon(2); d.step(14, 0.05);
+---
+wait 800
+---
+shot w_c
+---
+d.switchWeapon(3); d.step(14, 0.05);
+---
+wait 800
+---
+shot w_d

@@ -3,48 +3,109 @@
    ========================================================= */
 const NIGHT = { value: 0 };          // 0 = coucher du soleil, 1 = pleine nuit
 const SKY_SUN = SUN_DIR.clone();     // le disque du soleil : il s'enfonce dans la mer à la tombée de la nuit
-// ciel partagé : le dégradé, la lueur du soleil et une couche de nuages éclairés par le soleil ou la lune.
+const SKY_LITE = qualiteNom === 'basse';   // réglage « Basse » : nuages sans calcul d'éclairage
+// ciel partagé : le dégradé, la lueur de l'astre et les nuages (plafond, cumulus de l'horizon, voiles d'altitude).
 // La mer s'en sert aussi pour ses reflets : le ciel et son image restent toujours d'accord.
 const SKYU = {
   uTop: { value: C('#7a86e8') }, uMid: { value: C('#c9a2f2') }, uLow: { value: C('#ffa2cb') }, uHor: { value: FOG_COLOR.clone() }, uBelow: { value: C('#e9b8dc') },
-  uGlow: { value: HDR('#ffae96', 0.6) }, uCloudLit: { value: C('#fff1e4') }, uCloudDark: { value: C('#b79ad6') }, uCov: { value: 0.5 }, uNoise: { value: T.noise }, uCloudT: { value: 0 }
+  uGlow: { value: HDR('#ffae96', 0.6) }, uCloudLit: { value: C('#fff1e4') }, uCloudDark: { value: C('#b79ad6') }, uCloudRim: { value: C('#ffffff') },
+  uCov: { value: 0.5 }, uNoise: { value: T.noise }, uCloud: { value: T.cloud }, uCloudT: { value: 0 }
 };
 const SKY_GLSL = [
-  'uniform vec3 uTop, uMid, uLow, uHor, uGlow, uCloudLit, uCloudDark; uniform float uCov, uCloudT; uniform sampler2D uNoise;',
-  'vec3 skyGrad(vec3 d){ float h = d.y; vec3 c = mix(uHor, uLow, smoothstep(0.0, 0.11, h)); c = mix(c, uMid, smoothstep(0.08, 0.34, h)); c = mix(c, uTop, smoothstep(0.3, 0.9, h)); return c; }',
-  'float cloudN(vec2 q){ return texture2D(uNoise, q).r * 0.6 + texture2D(uNoise, q * 2.3 + vec2(0.31, 0.17) - uCloudT * 0.7).g * 0.3 + texture2D(uNoise, q * 6.1 + 0.5).a * 0.1; }',
+  SKY_LITE ? '#define SKY_LITE' : '',
+  'uniform vec3 uTop, uMid, uLow, uHor, uGlow, uCloudLit, uCloudDark, uCloudRim; uniform float uCov, uCloudT; uniform sampler2D uNoise, uCloud;',
+  'vec3 skyGrad(vec3 d){ float h = d.y; vec3 c = mix(uHor, uLow, smoothstep(0.0, 0.11, h)); c = mix(c, uMid, smoothstep(0.08, 0.34, h)); c = mix(c, uTop, smoothstep(0.2, 0.75, h)); return c; }',
+  // épaisseur du plafond de nuages (à plat au-dessus de la tête) et du banc de cumulus de l'horizon (déroulé autour du joueur)
+  'float cloudH(vec2 q){ return texture2D(uCloud, q).r + (texture2D(uCloud, q * 0.23 + vec2(0.37 - uCloudT * 0.35, 0.11)).b - 0.5) * 0.55; }',
+  'float bankH(vec2 q){ return texture2D(uCloud, q).r * 0.8 + texture2D(uCloud, q * 0.37 + 0.41).b * 0.3; }',
+  // un nuage vu d'en dessous : cœur épais et sombre, bords clairs du côté de l'astre, liseré lumineux à contre-jour
+  'vec3 cloudShade(float lit, float core, float ca, float dens, float h){',
+  '  vec3 col = mix(uCloudDark, uCloudLit, lit * (1.0 - core * 0.5));',
+  '  col = mix(col, uCloudRim, clamp((1.0 - core) * lit * lit * 0.6 + pow(ca, 7.0) * (1.0 - core * 0.8) * 0.7, 0.0, 1.0));',
+  '  col += uGlow * pow(ca, 5.0) * (1.3 - dens * 0.7);',
+  '  return mix(col, mix(uLow, uHor, 0.55) * 1.12, smoothstep(0.36, 0.02, h) * 0.5); }',
   'vec4 skyClouds(vec3 d, vec3 sd){',
-  '  float h = d.y; if (h < 0.012) return vec4(0.0);',
-  '  vec2 p = d.xz / (h + 0.16), q = p * 0.085 + vec2(uCloudT, uCloudT * 0.38);',
-  '  float n = cloudN(q), dens = smoothstep(uCov, uCov + 0.2, n);',
-  '  if (dens < 0.002) return vec4(0.0);',
-  // éclairage : on regarde s'il y a moins de nuage en direction de l'astre
-  '  vec2 sp = sd.xz / (max(sd.y, 0.02) + 0.16); vec2 ld = normalize(sp - p + vec2(1e-4));',
-  '  float n2 = cloudN(q + ld * 0.02); float lit = clamp(0.5 + (n - n2) * 5.0, 0.0, 1.0);',
+  '  float h = d.y; if (h < 0.01) return vec4(0.0);',
   '  float ca = max(dot(d, sd), 0.0);',
-  '  vec3 col = mix(uCloudDark, uCloudLit, lit) + uGlow * pow(ca, 5.0) * (1.4 - dens * 0.7);',
-  '  return vec4(col, dens * smoothstep(0.012, 0.15, h) * 0.94); }',
+  '  vec2 p = d.xz / (h + 0.16), q = p * 0.11 + vec2(uCloudT, uCloudT * 0.38);',
+  '  vec3 col = vec3(0.0); float al = 0.0;',
+  // 1. le plafond
+  '  float n = cloudH(q), det = texture2D(uCloud, q * 3.1 + vec2(-uCloudT * 1.3, uCloudT * 0.6)).g;',
+  '  float e = n - uCov - (1.0 - det) * 0.09, dens = smoothstep(0.0, 0.1, e) * smoothstep(0.03, 0.2, h);',
+  '  if (dens > 0.003) {',
+  '#ifdef SKY_LITE',
+  '    float lit = clamp(0.75 - e * 2.2, 0.0, 1.0);',
+  '#else',
+  '    vec2 sp = sd.xz / (max(sd.y, 0.02) + 0.16); vec2 ld = normalize(sp - p + vec2(1e-4));',
+  '    float lit = clamp(0.5 + (n - cloudH(q + ld * 0.014)) * 7.0, 0.0, 1.0);',
+  '#endif',
+  '    col = cloudShade(lit, smoothstep(0.03, 0.32, e), ca, dens, h); al = dens * 0.96;',
+  '  }',
+  // 2. les cumulus de l'horizon, qui se dressent comme des tours (une trouée côté terre cache le raccord du déroulé)
+  '  if (h < 0.46) {',
+  '    float az = atan(d.x, -d.z);',
+  '    vec2 qb = vec2(az * 0.4775 + uCloudT * 0.6, h * 0.86 + 0.12);',
+  '    float nb = bankH(qb), detb = texture2D(uCloud, qb * vec2(3.0, 3.4) + vec2(uCloudT, 0.0)).g;',
+  '    float eb = nb - (uCov - 0.2 + smoothstep(0.0, 0.44, h) * 0.52) - (1.0 - detb) * 0.07;',
+  '    float db = smoothstep(0.0, 0.07, eb) * smoothstep(0.008, 0.05, h) * smoothstep(0.0, 0.3, 3.14159 - abs(az));',
+  '    if (db > 0.003) {',
+  '#ifdef SKY_LITE',
+  '      float lb = clamp(0.8 - eb * 2.4, 0.0, 1.0);',
+  '#else',
+  '      float da = atan(sd.x, -sd.z) - az; da -= 6.2832 * floor(da / 6.2832 + 0.5);',
+  '      vec2 lv = normalize(vec2(da * 0.4775, (sd.y - h) * 0.86 + 0.25));',
+  '      float lb = clamp(0.5 + (nb - bankH(qb + lv * 0.012)) * 8.0, 0.0, 1.0);',
+  '#endif',
+  '      vec3 cb = cloudShade(lb, smoothstep(0.02, 0.26, eb), ca, db, h * 0.75);',
+  '      float ab = db * 0.97; col = mix(col, cb, ab / max(ab + al * (1.0 - ab), 1e-3)); al = ab + al * (1.0 - ab);',
+  '    }',
+  '  }',
+  // 3. les voiles d'altitude, derrière tout le reste
+  '  float cir = smoothstep(0.5, 0.8, texture2D(uCloud, p * 0.024 + vec2(uCloudT * 0.45, 0.3)).a) * 0.4 * smoothstep(0.04, 0.3, h);',
+  '  if (cir > 0.003) { vec3 cc = mix(uCloudLit, uCloudRim, 0.35) * (0.7 + 0.6 * pow(ca, 3.0)); float a2 = cir * (1.0 - al); col = mix(cc, col, al / max(al + a2, 1e-3)); al += a2; }',
+  '  return vec4(col, al); }',
   'vec3 skyAt(vec3 d, vec3 sd){ vec3 c = skyGrad(d); float ca = max(dot(d, sd), 0.0); c += uGlow * (pow(ca, 10.0) * 0.55 + pow(ca, 220.0) * 1.1); vec4 cl = skyClouds(d, sd); return mix(c, cl.rgb, cl.a); }'
 ].join('\n');
+// la voie lactée suit un grand cercle qui monte de la mer, à droite de la lune
+const MW_N = new V3(0.7147, -0.3049, 0.6296).normalize(), MW_T1 = new V3().crossVectors(MW_N, UP).normalize(), MW_T2 = new V3().crossVectors(MW_T1, MW_N).normalize();
 const skyMat = new THREE.ShaderMaterial({
   uniforms: Object.assign({
     uSunA: { value: HDR('#ffe36e', 1.45) }, uSunB: { value: HDR('#ff4f9f', 1.35) },
-    uSunDir: { value: SKY_SUN }, uTime: clockU, uNight: NIGHT, uMoonDir: { value: LIGHT_DIR }, uBelow: SKYU.uBelow
+    uSunDir: { value: SKY_SUN }, uTime: clockU, uNight: NIGHT, uMoonDir: { value: LIGHT_DIR }, uBelow: SKYU.uBelow, uMoonT: { value: T.moon },
+    uMwN: { value: MW_N }, uMwT1: { value: MW_T1 }, uMwT2: { value: MW_T2 }
   }, SKYU),
   vertexShader: 'varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position = p.xyww; }',
   fragmentShader: [
     SKY_GLSL,
-    'uniform vec3 uBelow, uSunA, uSunB, uSunDir, uMoonDir; uniform float uTime, uNight; varying vec3 vDir;',
+    'uniform vec3 uBelow, uSunA, uSunB, uSunDir, uMoonDir, uMwN, uMwT1, uMwT2; uniform float uTime, uNight; uniform sampler2D uMoonT; varying vec3 vDir;',
     'float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }',
     'vec3 hue(float h){ return clamp(abs(mod(h*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0,0.0,1.0); }',
+    // un semis d'étoiles : chacune a sa place dans sa case, son éclat et son scintillement
+    'float starLayer(vec3 d, float sc, float thr){ vec2 sp = d.xz / (d.y + 0.3) * sc, id = floor(sp); float s = hash(id); if (s < thr) return 0.0;',
+    '  vec2 f = fract(sp) - 0.5 - (vec2(hash(id + 3.1), hash(id + 7.7)) - 0.5) * 0.5; float tw = 0.62 + 0.38 * sin(uTime * (1.4 + s * 3.0) + s * 60.0);',
+    '  return (1.0 - smoothstep(0.0, 0.11, length(f))) * tw * (0.35 + 0.65 * fract(s * 37.3)); }',
     'void main(){',
     '  vec3 d = normalize(vDir); float h = d.y;',
     '  vec3 col = skyGrad(d);',
     '  col = mix(col, uBelow, smoothstep(0.0, 0.1, -h));',
     '  vec3 sd = normalize(uSunDir); float ca = dot(d, sd);',
-    // voie lactée et étoiles, puis la lune
-    '  if (h > 0.03) { vec2 sp = d.xz/(h+0.3)*240.0; vec2 id = floor(sp); float s = hash(id); if (s > mix(0.993, 0.972, uNight)) { vec2 f = fract(sp)-0.5; float tw = 0.6+0.4*sin(uTime*2.0+s*60.0); col += vec3(1.0,0.92,1.0)*(1.0 - smoothstep(0.0, 0.12, length(f)))*tw*smoothstep(mix(0.3, 0.03, uNight), mix(0.75, 0.3, uNight), h)*(1.3 + uNight*1.2); }',
-    '    float mw = texture2D(uNoise, d.xz / (h + 0.4) * 0.35 + 0.2).r; col += vec3(0.55, 0.5, 0.9) * smoothstep(0.45, 0.8, mw) * smoothstep(0.1, 0.5, h) * 0.16 * uNight; }',
+    '  vec3 md = normalize(uMoonDir); float cm = dot(d, md);',
+    '  if (h > 0.02) {',
+    '    float hf = smoothstep(mix(0.3, 0.02, uNight), mix(0.75, 0.24, uNight), h), mwS = 0.0;',
+    // la voie lactée : un ruban de lueur bleutée, plus rose au cœur, barré de sillons sombres
+    '    float b = dot(d, uMwN), band = exp(-b * b * 20.0) * uNight;',
+    '    if (band > 0.02) {',
+    '      float u = atan(dot(d, uMwT1), dot(d, uMwT2)); vec2 q = vec2(u * 1.25, b * 1.7);',
+    '      float n = texture2D(uNoise, q + 0.13).r, n2 = texture2D(uNoise, q * 3.1 + 0.5).g;',
+    '      float dust = smoothstep(0.42, 0.66, texture2D(uNoise, vec2(u * 0.7, b * 2.6) + n * 0.25 + 0.31).g) * exp(-b * b * 150.0);',
+    '      float grain = texture2D(uNoise, q * 9.0 + 0.7).a;',
+    '      mwS = band * (0.3 + 2.6 * n * n2) * (1.0 - 0.8 * dust) * (0.7 + 0.6 * grain);',
+    '      col += mix(vec3(0.34, 0.42, 1.0), vec3(1.0, 0.74, 0.9), exp(-b * b * 110.0) * (0.35 + 0.65 * n)) * mwS * 0.16 * hf;',
+    '    }',
+    '    float st = starLayer(d, 240.0, mix(0.993, 0.965, uNight)) * 1.25 + starLayer(d, 560.0, mix(0.9995, 0.93 - mwS * 0.22, uNight)) * 0.75 * uNight;',
+    '    float sh = hash(floor(d.xz / (h + 0.3) * 240.0) + 11.0);',
+    '    col += mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.86, 0.8), sh) * st * hf * (1.3 + uNight * 1.3) * (1.0 - 0.8 * smoothstep(0.94, 0.995, cm) * uNight);',
+    '  }',
     '  col += uGlow*(pow(max(ca,0.0),10.0)*0.55 + pow(max(ca,0.0),220.0)*1.1);',
     '  vec3 rgt = normalize(cross(sd, vec3(0.0,1.0,0.0))); vec3 up = cross(rgt, sd);',
     '  vec2 p = vec2(dot(d,rgt), dot(d,up))/0.125; float r = length(p);',
@@ -58,18 +119,24 @@ const skyMat = new THREE.ShaderMaterial({
     '  }',
     '  float ra = acos(clamp(dot(d, -sd), -1.0, 1.0)); float rb = (ra - 0.69)/0.065;',
     '  if (rb > 0.0 && rb < 1.0) { vec3 rc = hue(0.78 - rb*0.78); float a = sin(rb*3.14159)*0.2*smoothstep(-0.01, 0.06, h)*(1.0 - smoothstep(0.3, 0.6, h)); col += rc*a*0.7*(1.0 - uNight); }',
-    '  vec3 md = normalize(uMoonDir); float cm = dot(d, md);',
-    '  { float mr = acos(clamp(cm, -1.0, 1.0)) / 0.085; if (mr < 1.0) { vec3 mrg = normalize(cross(md, vec3(0.0,1.0,0.0))); vec3 mup = cross(mrg, md); vec2 mp = vec2(dot(d, mrg), dot(d, mup)) / 0.085; float cr = 0.0; for (int i = 0; i < 5; i++) { vec2 cc = vec2(hash(vec2(float(i), 1.3)), hash(vec2(float(i), 7.7))) * 1.3 - 0.65; cr += smoothstep(0.24, 0.1, length(mp - cc)) * 0.12; } float mt = texture2D(uNoise, mp * 0.35 + 0.4).g; vec3 mc = mix(vec3(1.0, 0.86, 0.95), vec3(0.86, 0.9, 1.0), mp.y * 0.5 + 0.5) * (1.0 - cr) * (0.85 + 0.3 * mt) * (1.15 - 0.3 * mr * mr); col = mix(col, mc * (0.55 + 1.3 * uNight), (1.0 - smoothstep(0.94, 1.0, mr)) * (0.3 + 0.7 * uNight)); } col += vec3(0.7, 0.75, 1.0) * pow(max(cm, 0.0), 60.0) * 0.22 * uNight; }',
+    // la lune : une vraie sphère (ses reliefs se tassent vers le bord), ses mers, ses cratères, son halo
+    '  { float mr = acos(clamp(cm, -1.0, 1.0)) / 0.085;',
+    '    if (mr < 1.0) { vec3 mrg = normalize(cross(md, vec3(0.0,1.0,0.0))); vec3 mup = cross(mrg, md); vec2 mp = clamp(vec2(dot(d, mrg), dot(d, mup)) / 0.0849, -1.0, 1.0);',
+    '      float mu = sqrt(max(1.0 - dot(mp, mp), 0.0));',
+    '      vec2 muv = vec2(asin(clamp(mp.x / max(sqrt(1.0 - mp.y * mp.y), 1e-3), -1.0, 1.0)), asin(mp.y)) / 3.14159 + 0.5;',
+    '      vec3 mc = texture2D(uMoonT, muv).rgb * (0.8 + 0.2 * mu) * mix(vec3(1.0, 0.85, 0.9), vec3(1.0), uNight);',
+    '      col = mix(col, mix(col + mc * 0.3, mc * 1.4, uNight), (1.0 - smoothstep(0.955, 1.0, mr)) * (0.6 + 0.4 * uNight)); }',
+    '    col += vec3(0.66, 0.72, 1.0) * (pow(max(cm, 0.0), 60.0) * 0.2 + pow(max(cm, 0.0), 900.0) * 0.45 * step(1.0, mr)) * uNight; }',
     // les nuages passent devant, sauf au cœur du soleil et de la lune qui percent au travers
     '  vec3 ld = mix(sd, md, step(0.5, uNight));',
-    '  vec4 cl = skyClouds(d, ld); cl.a *= 1.0 - 0.75 * smoothstep(0.985, 0.998, max(ca, 0.0)) - 0.6 * smoothstep(0.992, 0.999, max(cm, 0.0)) * uNight;',
+    '  vec4 cl = skyClouds(d, ld); cl.a *= 1.0 - 0.75 * smoothstep(0.985, 0.998, max(ca, 0.0)) - 0.62 * smoothstep(0.992, 0.999, max(cm, 0.0)) * uNight;',
     '  col = mix(col, cl.rgb, clamp(cl.a, 0.0, 1.0));',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
   ].join('\n'),
   side: THREE.BackSide, depthWrite: false, fog: false
 });
-let mountMat = null;
+let mountWire = null, coastLights = null;
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 48, 24), skyMat);
 sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
 {
@@ -77,20 +144,45 @@ sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
   const g = new THREE.PlaneGeometry(1, 1, segX, segY);
   const p = g.attributes.position, colors = [];
   const cBase = C('#8a74c6'), cTop = C('#f1a9d6');
+  const ridge = (a) => Math.max(0, Math.sin(a * 3.0 + 1.3) * 0.5 + Math.sin(a * 7.0 + 0.4) * 0.35 + Math.sin(a * 17.0) * 0.18 + Math.sin(a * 31.0 + 2.0) * 0.08 + 0.35);
   for (let i = 0; i < p.count; i++) {
     const u = p.getX(i) + 0.5, v = p.getY(i) + 0.5, a = u * Math.PI * 2;
-    const n = Math.max(0, Math.sin(a * 3.0 + 1.3) * 0.5 + Math.sin(a * 7.0 + 0.4) * 0.35 + Math.sin(a * 17.0) * 0.18 + Math.sin(a * 31.0 + 2.0) * 0.08 + 0.35);
+    const n = ridge(a);
     const peak = (24 + 62 * n * n) * Math.pow(v, 1.15) + (R() - 0.5) * 3 * v * (1 - v) * 2;
     const rad = Rm - v * 50;
     p.setXYZ(i, 19 + Math.sin(a) * rad, H0 + peak, -12 + Math.cos(a) * rad);
     const c = cBase.clone().lerp(cTop, v); colors.push(c.r, c.g, c.b);
   }
-  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute('aCol', new THREE.Float32BufferAttribute(colors, 3));
   g.computeVertexNormals();
-  const mt = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false }));
-  mt.renderOrder = -5; scene.add(mt); mountMat = mt.material;
-  const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: HDR('#ff9be0', 1.25), wireframe: true, transparent: true, opacity: 0.45, fog: false }));
-  wire.renderOrder = -4; scene.add(wire);
+  // les collines du fond : leur pied se fond dans la brume de l'horizon, et elles s'éteignent la nuit
+  const mt = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    uniforms: { uHor: SKYU.uHor, uLow: SKYU.uLow, uNight: NIGHT },
+    vertexShader: 'attribute vec3 aCol; varying vec3 vC; varying float vV; void main(){ vC = aCol; vV = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 uHor, uLow; uniform float uNight; varying vec3 vC; varying float vV; void main(){ vec3 c = vC * mix(1.0, 0.15, uNight); c = mix(mix(uHor, uLow, 0.35), c, smoothstep(-0.1, 0.55, vV) * mix(0.82, 0.92, uNight)); gl_FragColor = vec4(c, 1.0); }',
+    side: THREE.DoubleSide
+  }));
+  mt.renderOrder = -5; mt.frustumCulled = false; scene.add(mt);
+  const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: HDR('#ff9be0', 1.25), wireframe: true, transparent: true, opacity: 0.4, fog: false }));
+  wire.renderOrder = -4; scene.add(wire); mountWire = wire.material;
+  // lumières de la côte : de petites villes au pied des collines, qui s'allument à la tombée de la nuit
+  let ls = 20261121; const lr = () => (ls = (ls * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const NL = 1100, lp = new Float32Array(NL * 3), lc = new Float32Array(NL * 3), lph = new Float32Array(NL), pal = ['#ffd9a0', '#ffb07a', '#ff9fd0', '#9fe8ff', '#fff2d8', '#ffc98a'].map(C);
+  for (let k = 0; k < NL;) {
+    const a = lr() * Math.PI * 2, town = Math.max(0, Math.sin(a * 5 + 0.7) * 0.6 + Math.sin(a * 13 + 2.1) * 0.4);
+    if (lr() > 0.1 + town * 0.95) continue;
+    const v = Math.pow(lr(), 2.4) * 0.36, n = ridge(a), rad = Rm - v * 50 - 3;
+    lp[k * 3] = 19 + Math.sin(a) * rad; lp[k * 3 + 1] = H0 + (24 + 62 * n * n) * Math.pow(v, 1.15) + 0.8; lp[k * 3 + 2] = -12 + Math.cos(a) * rad;
+    const c = pal[Math.floor(lr() * pal.length)]; lc[k * 3] = c.r; lc[k * 3 + 1] = c.g; lc[k * 3 + 2] = c.b; lph[k] = lr() * 100; k++;
+  }
+  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(lp, 3)); lg.setAttribute('aCol', new THREE.BufferAttribute(lc, 3)); lg.setAttribute('aPh', new THREE.BufferAttribute(lph, 1));
+  coastLights = new THREE.ShaderMaterial({
+    uniforms: { uTime: clockU, uNight: NIGHT, uH: { value: innerHeight * pixelRatio } },
+    vertexShader: 'attribute vec3 aCol; attribute float aPh; uniform float uTime, uNight, uH; varying vec3 vC; void main(){ float tw = 0.72 + 0.28 * sin(uTime * (0.8 + fract(aPh) * 2.2) + aPh * 40.0); vC = aCol * tw * smoothstep(0.25, 0.9, uNight) * (1.5 + 1.6 * fract(aPh * 7.0)); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = max(1.5, (0.0026 + 0.0026 * fract(aPh * 3.0)) * uH); }',
+    fragmentShader: 'varying vec3 vC; void main(){ float a = 1.0 - smoothstep(0.12, 0.5, length(gl_PointCoord - 0.5)); gl_FragColor = vec4(vC * a, 1.0); }',
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const pts = new THREE.Points(lg, coastLights); pts.frustumCulled = false; pts.renderOrder = -3; scene.add(pts);
 }
 const FOG_GLSL_PARS = 'uniform vec3 uFogColor; uniform float uFogDensity;';
 const FOG_GLSL = 'float fogD = length(vW - cameraPosition); float fogF = 1.0 - exp(-uFogDensity*uFogDensity*fogD*fogD); col = mix(col, uFogColor, clamp(fogF,0.0,1.0));';
@@ -157,8 +249,8 @@ function refreshEnv() { const rt = pmrem.fromScene(envScene, 0.015, 0.1, 200); s
 const TIME = { t: 215, len: 660, envN: 0, dusk: 300, night: 370, dawn: 590 };
 function nightAt(t) { t = ((t % TIME.len) + TIME.len) % TIME.len; if (t < TIME.dusk) return 0; if (t < TIME.night) return smooth(TIME.dusk, TIME.night, t); if (t < TIME.dawn) return 1; return 1 - smooth(TIME.dawn, TIME.len, t); }
 const DAYC = { top: C('#5c6cdf'), mid: C('#b18df0'), low: C('#ff9ac2'), hor: C('#ffbdb4'), below: C('#e9b8dc'), fog: C('#f7bcc2'), sun: C('#ffc9a0'), hs: C('#9d8cff'), hg: C('#c06aa0'), glow: HDR('#ffae96', 0.6) };
-const NITC = { top: C('#0b0a2c'), mid: C('#251a66'), low: C('#5a3398'), hor: C('#9a4f9f'), below: C('#141034'), fog: C('#2b2058'), sun: C('#8ea0ff'), hs: C('#5a6ae0'), hg: C('#3a2a70'), glow: HDR('#ff8fb8', 0.25) };
-const CLD = { dLit: C('#fff4ea'), dDark: C('#b9a0d6'), kLit: C('#ffb49c'), kDark: C('#7558a4'), nLit: C('#5d64a8'), nDark: C('#141335'), moonFog: new THREE.Color(0.1, 0.12, 0.24) };
+const NITC = { top: C('#0b0a2c'), mid: C('#251a66'), low: C('#5a3398'), hor: C('#9a4f9f'), below: C('#141034'), fog: C('#372868'), sun: C('#8ea0ff'), hs: C('#5a6ae0'), hg: C('#3a2a70'), glow: HDR('#ff8fb8', 0.25) };
+const CLD = { dLit: C('#ffeede'), dDark: C('#a78dcc'), dRim: C('#fffaf2'), kLit: C('#ffb49c'), kDark: C('#6d4f9e'), kRim: C('#ffe6c6'), nLit: C('#7c70d6'), nDark: C('#121034'), nRim: C('#e4d8ff'), moonFog: new THREE.Color(0.1, 0.12, 0.24) };
 function applyTime() {
   const n = NIGHT.value, u = skyMat.uniforms;
   u.uTop.value.copy(DAYC.top).lerp(NITC.top, n); u.uMid.value.copy(DAYC.mid).lerp(NITC.mid, n); u.uLow.value.copy(DAYC.low).lerp(NITC.low, n);
@@ -169,15 +261,15 @@ function applyTime() {
   u.uGlow.value.copy(DAYC.glow).lerp(NITC.glow, n).multiplyScalar(lerp(1, 0.35, smooth(0.5, 1, n)));
   sun.color.copy(DAYC.sun).lerp(NITC.sun, n); sun.intensity = lerp(2.5, 0.62, n);
   hemi.color.copy(DAYC.hs).lerp(NITC.hs, n); hemi.groundColor.copy(DAYC.hg).lerp(NITC.hg, n); hemi.intensity = lerp(0.055, 0.2, n);
-  ZONE_DEF.bloom = lerp(0.24, 0.6, n); ZONE_DEF.fog = lerp(0.0017, 0.0022, n); ZONE_DEF.expo = lerp(0.55, 1.0, n);
+  ZONE_DEF.bloom = lerp(0.24, 0.6, n); ZONE_DEF.fog = lerp(0.0017, 0.0022, n); ZONE_DEF.expo = lerp(0.5, 1.0, n);
   // les montagnes du fond s'assombrissent la nuit : il ne reste que leurs arêtes au néon
-  if (mountMat) mountMat.color.setScalar(lerp(1, 0.2, n));
+  if (mountWire) mountWire.opacity = lerp(0.4, 0.045, n);
   // nuages : dorés le jour, braise au crépuscule, bleu nuit sous la lune
   const k1 = smooth(0, 0.45, n), k2 = smooth(0.45, 1, n);
-  SKYU.uCloudLit.value.copy(CLD.dLit).lerp(CLD.kLit, k1).lerp(CLD.nLit, k2); SKYU.uCloudDark.value.copy(CLD.dDark).lerp(CLD.kDark, k1).lerp(CLD.nDark, k2);
+  SKYU.uCloudLit.value.copy(CLD.dLit).lerp(CLD.kLit, k1).lerp(CLD.nLit, k2); SKYU.uCloudDark.value.copy(CLD.dDark).lerp(CLD.kDark, k1).lerp(CLD.nDark, k2); SKYU.uCloudRim.value.copy(CLD.dRim).lerp(CLD.kRim, k1).lerp(CLD.nRim, k2);
   SKYU.uCloudT.value = clockU.value * 0.0016; SKYU.uCov.value = 0.5 + 0.045 * Math.sin(TIME.t * 0.019);
   // la brume s'éclaire en direction du soleil (ou, plus discrètement, de la lune)
-  if (n < 0.5) { FOGU.sun.value.copy(SKY_SUN); FOGU.col.value.copy(u.uGlow.value).multiplyScalar(0.5 * smooth(-0.08, 0.03, SKY_SUN.y)); }
+  if (n < 0.5) { FOGU.sun.value.copy(SKY_SUN); FOGU.col.value.copy(u.uGlow.value).multiplyScalar(0.36 * smooth(-0.08, 0.03, SKY_SUN.y)); }
   else { FOGU.sun.value.copy(LIGHT_DIR); FOGU.col.value.copy(CLD.moonFog).multiplyScalar(smooth(0.5, 1, n)); }
   if (Math.abs(n - TIME.envN) > 0.1 || (n !== TIME.envN && (n === 0 || n === 1))) { TIME.envN = n; refreshEnv(); }
 }

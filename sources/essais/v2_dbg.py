@@ -4,7 +4,7 @@ from v2 import *
 SCRIPT = open(sys.argv[1]).read()
 async def main():
     async with async_playwright() as p:
-        b, ctx = await setup(p, 960, 540)
+        b, ctx = await setup(p, int(__import__("os").environ.get("VW", 960)), int(__import__("os").environ.get("VH", 540)))
         logs = []
         pg = await page(ctx, logs)
         await pg.wait_for_timeout(4000)

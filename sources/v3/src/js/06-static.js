@@ -187,7 +187,7 @@ function rayLamps(o, d, best, res) {
 }
 function breakLamp(h, dir, fromNet) {
   if (!h.alive) return;
-  h.alive = false; h.tDead = clockU.value; h.light.on = false; h.cone.visible = false;
+  h.alive = false; h.tDead = clockU.value; h.light.on = false; h.cone.visible = false; setLightFx(h.fx, false);
   bulbIM.setMatrixAt(h.id, ZM4); bulbIM.instanceMatrix.needsUpdate = true;
   spawnShards(h.x, h.y - 0.1, h.z, 0, 0.45, 0.2, dir);
   for (let i = 0; i < 18; i++) spawnSpark(h.x, h.y - 0.1, h.z, rnd(-3, 3), rnd(-2, 2), rnd(-3, 3), rnd(0.4, 1));
@@ -199,7 +199,7 @@ function updateLamps() {
   for (const h of LAMP_HEADS) {
     if (h.alive) continue;
     const dt = t - h.tDead;
-    if (dt > 25) { h.alive = true; h.light.on = true; h.cone.visible = true; h.light.flick = 0; bulbIM.setMatrixAt(h.id, h.bm); bulbIM.instanceMatrix.needsUpdate = true; for (let i = 0; i < 8; i++) spawnSpark(h.x, h.y - 0.1, h.z, rnd(-1, 1), rnd(-1, 1), rnd(-1, 1), 0.5); }
+    if (dt > 25) { h.alive = true; h.light.on = true; h.cone.visible = true; h.light.flick = 0; setLightFx(h.fx, true); bulbIM.setMatrixAt(h.id, h.bm); bulbIM.instanceMatrix.needsUpdate = true; for (let i = 0; i < 8; i++) spawnSpark(h.x, h.y - 0.1, h.z, rnd(-1, 1), rnd(-1, 1), rnd(-1, 1), 0.5); }
   }
 }
 /* ---------- voitures rétro (alarme quand on leur tire dessus) ---------- */

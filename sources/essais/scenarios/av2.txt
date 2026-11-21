@@ -1,0 +1,5 @@
+d.setTimeOfDay(430); d.setState('apercu'); d.camera.position.set(-46, 1.2, -52); d.camera.lookAt(10, 9, -130);
+---
+wait 6000
+---
+shot av_grand

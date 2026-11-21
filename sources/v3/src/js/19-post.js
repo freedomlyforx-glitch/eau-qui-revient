@@ -165,7 +165,7 @@ function resize() {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   const w = Math.floor(innerWidth * pixelRatio), h = Math.floor(innerHeight * pixelRatio);
   composer.setSize(w, h); finalPass.uniforms.uRes.value.set(w, h);
-  motes.uniforms.uScale.value = h * 0.5;
+  motes.uniforms.uScale.value = h * 0.5; if (coastLights) coastLights.uniforms.uH.value = h;
   reflSize();
 }
 addEventListener('resize', resize);
@@ -175,15 +175,19 @@ function updateFx() {
   const q = PRESETS[qualiteNom], u = fxMat.uniforms, f = finalPass.uniforms;
   f.uFxaa.value = q.fxaa; f.uSharp.value = q.fxaa ? (pixelRatio < 1.3 ? 0.4 : 0.28) : 0;
   let ray = 0;
-  if (DEPTH_OK && q.rays && SKY_SUN.y > -0.03 && !P.underwater) {
-    camera.getWorldDirection(_fwd); const face = _fwd.dot(SKY_SUN);
-    if (face > 0.15) { _sunP.copy(SKY_SUN).multiplyScalar(900).add(camera.position).project(camera); u.uSunUV.value.set(_sunP.x * 0.5 + 0.5, _sunP.y * 0.5 + 0.5); ray = smooth(0.15, 0.5, face) * smooth(-0.03, 0.04, SKY_SUN.y) * (1 - NIGHT.value) * 0.3 * (1 - smooth(0.85, 1.25, Math.max(Math.abs(_sunP.x), Math.abs(_sunP.y)))); }
+  // rayons du soleil le jour ; la nuit, ceux de la lune, plus discrets et bleutés
+  const moon = NIGHT.value > 0.6, astre = moon ? LIGHT_DIR : SKY_SUN;
+  if (DEPTH_OK && q.rays && (moon || SKY_SUN.y > -0.03) && !P.underwater) {
+    camera.getWorldDirection(_fwd); const face = _fwd.dot(astre);
+    if (face > 0.15) { _sunP.copy(astre).multiplyScalar(900).add(camera.position).project(camera); u.uSunUV.value.set(_sunP.x * 0.5 + 0.5, _sunP.y * 0.5 + 0.5);
+      const k = moon ? smooth(0.6, 1, NIGHT.value) * 0.13 : smooth(-0.03, 0.04, SKY_SUN.y) * (1 - smooth(0.3, 0.6, NIGHT.value)) * 0.24;
+      ray = smooth(0.15, 0.5, face) * k * (1 - smooth(0.85, 1.25, Math.max(Math.abs(_sunP.x), Math.abs(_sunP.y)))); }
   }
   const ao = DEPTH_OK && q.ao ? 0.9 : 0;
   fxPass.enabled = ao > 0 || ray > 0.004;
   u.uAoK.value = ao; u.uRayK.value = ray; u.uNear.value = 0.15; u.uFar.value = camera.far;
   const t = Math.tan(camera.fov * Math.PI / 360); u.uProj.value.set(t * camera.aspect, t);
-  fxComp.uniforms.uRayCol.value.copy(SKYU.uGlow.value).multiplyScalar(0.9);
+  if (moon) fxComp.uniforms.uRayCol.value.setRGB(0.5, 0.56, 0.95); else fxComp.uniforms.uRayCol.value.copy(SKYU.uGlow.value).multiplyScalar(0.9);
 }
 function applyQuality(name, auto) {
   qualiteNom = name; if (!auto) store('qualite', name);

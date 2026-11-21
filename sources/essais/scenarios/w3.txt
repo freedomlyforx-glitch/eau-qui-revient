@@ -1,0 +1,5 @@
+d.setTimeOfDay(430); const P = d.P; P.pos.set(2, 0.03, -30); P.vel.set(0, 0, 0); P.yaw = 0.1; P.pitch = 0.02; P.aiming = true; d.step(16, 0.04); return JSON.stringify({ ads: +d.WPN.ads.toFixed(2) })
+---
+wait 900
+---
+shot w_f

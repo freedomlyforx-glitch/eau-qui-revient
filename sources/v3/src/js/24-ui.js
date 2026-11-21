@@ -115,9 +115,16 @@ function drawRadar() {
     g.fillStyle = '#8ff6ff'; g.beginPath(); g.arc(R + rx, R + rz, pulse, 0, 7); g.fill();
   }
   g.fillStyle = '#ff9fcd'; g.beginPath(); g.moveTo(R, R - 9); g.lineTo(R + 6.5, R + 7); g.lineTo(R, R + 3); g.lineTo(R - 6.5, R + 7); g.closePath(); g.fill();
-  g.strokeStyle = 'rgba(255,245,250,0.55)'; g.lineWidth = 2; g.beginPath(); g.arc(R, R, R - 2, 0, 7); g.stroke();
-  g.fillStyle = 'rgba(255,245,250,0.8)'; g.font = '22px "VT323",monospace'; g.textAlign = 'center';
-  const nx = Math.sin(P.yaw) * (R - 16), nz = -Math.cos(P.yaw) * (R - 16); g.fillText('N', R + nx, R + nz + 7);
+  // couronne de boussole : graduations tous les trente degrés, les quatre points cardinaux
+  g.strokeStyle = 'rgba(255,245,250,0.6)'; g.lineWidth = 2; g.beginPath(); g.arc(R, R, R - 2, 0, 7); g.stroke();
+  g.strokeStyle = 'rgba(255,245,250,0.16)'; g.lineWidth = 1.5; g.beginPath(); g.arc(R, R, R * 0.5, 0, 7); g.stroke();
+  const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
+  g.strokeStyle = 'rgba(255,245,250,0.5)'; g.lineWidth = 2; g.beginPath();
+  for (let k = 0; k < 12; k++) { if (k % 3 === 0) continue; const a = P.yaw + k * Math.PI / 6, sx = Math.sin(a), cx = -Math.cos(a); g.moveTo(R + sx * (R - 3), R + cx * (R - 3)); g.lineTo(R + sx * (R - 13), R + cx * (R - 13)); }
+  g.stroke();
+  g.font = '26px "VT323",monospace'; g.textAlign = 'center';
+  const card = [['N', sy, -cy, 0.95], ['E', cy, sy, 0.6], ['S', -sy, cy, 0.6], ['O', -cy, -sy, 0.6]];
+  for (const [t, dx, dz, al] of card) { g.fillStyle = 'rgba(28,20,48,0.55)'; g.beginPath(); g.arc(R + dx * (R - 17), R + dz * (R - 17), 12, 0, 7); g.fill(); g.fillStyle = t === 'N' ? 'rgba(255,170,215,' + al + ')' : 'rgba(255,245,250,' + al + ')'; g.fillText(t, R + dx * (R - 17), R + dz * (R - 17) + 8); }
 }
 /* ---------- HUD ---------- */
 const hudEls = { viseur: $('viseur'), impact: $('impact'), fleche: $('fleche'), chevron: $('chevron'), dist: $('dist'), boss: $('boss'), bossBarre: $('bossBarre'), temps: $('vhsTemps') };

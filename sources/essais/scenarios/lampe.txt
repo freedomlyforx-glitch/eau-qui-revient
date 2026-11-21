@@ -1,0 +1,5 @@
+const h = d.LAMP_HEADS[0], V = d.camera.position.constructor; const o = new V(h.x - 3, h.y - 2, h.z); const dir = new V(h.x - o.x, h.y - o.y, h.z - o.z).normalize();
+const r = d.traceShot(o, dir, 50); const out = { kind: r.kind, fx: h.fx }; d.applyHit(r, dir, d.curW(), 1, false);
+out.alive = h.alive; out.hk = d.BULBS.halo.geometry.attributes.aCol.getW(h.fx.h); out.gk = h.fx.g >= 0 ? d.BULBS.glint.geometry.attributes.aPar.getX(h.fx.g) : null;
+d.step(560, 0.05); out.alive2 = h.alive; out.hk2 = +d.BULBS.halo.geometry.attributes.aCol.getW(h.fx.h).toFixed(2); out.gk2 = h.fx.g >= 0 ? +d.BULBS.glint.geometry.attributes.aPar.getX(h.fx.g).toFixed(2) : null;
+return JSON.stringify(out)

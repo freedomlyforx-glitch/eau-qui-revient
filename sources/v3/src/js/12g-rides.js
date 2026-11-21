@@ -28,6 +28,15 @@ const _rm4 = new THREE.Matrix4(), _rv = new V3(), _rq = new THREE.Quaternion(), 
   for (let i = 0; i < W.n; i++) { const a = i * 2 * PI / W.n; gs.push(vc(cylG(0.06, 0.06, 2.3, 8).rotateX(PI / 2), M4(Math.sin(a) * R, -Math.cos(a) * R, 0), '#fff7ef')); }
   const wm = new THREE.Mesh(mergeGeos(gs), VCMAT); gs.forEach((g) => g.dispose());
   wm.position.set(W.x, W.y, W.z); wm.castShadow = true; world.add(wm); W.mesh = wm;
+  // néons de la roue : jantes et rayons soulignés de lumière (une maille à part, qui tourne avec elle)
+  { const ls = [];
+    for (const s of [-1.27, 1.27]) {
+      ls.push(vc(new THREE.TorusGeometry(R, 0.05, 5, 96), M4(0, 0, s), '#ff8fd0'), vc(new THREE.TorusGeometry(R * 0.6, 0.04, 5, 64), M4(0, 0, s), '#8ff6ff'), vc(new THREE.TorusGeometry(R * 0.22, 0.04, 5, 32), M4(0, 0, s), '#ffd27a'));
+      for (let i = 0; i < W.n; i++) ls.push(vc(boxG(0.035, R * 0.76, 0.035), new THREE.Matrix4().makeRotationZ((i + 0.5) * 2 * PI / W.n).multiply(M4(0, R * 0.6, s * 0.93)), i % 2 ? '#c9b0ff' : '#ff9fd8'));
+    }
+    const nm = new THREE.MeshBasicMaterial({ vertexColors: true }); NEONS.push({ m: nm, c: C('#ffffff'), k: 0.85 });
+    const lm = new THREE.Mesh(mergeGeos(ls), nm); ls.forEach((g) => g.dispose()); wm.add(lm); }
+  glint(W.x, 8, W.z, '#ff8fd0', 0.45, 3.2); glint(W.x, 19, W.z, '#c9b0ff', 0.45, 3.2); glint(W.x, 31, W.z, '#8ff6ff', 0.4, 3.2);
   // nacelles : toujours droites, une couleur pastel chacune
   const ns = [vc(boxG(0.06, 0.75, 0.06), M4(0, -0.36, 0.72), '#ffffff'), vc(boxG(0.06, 0.75, 0.06), M4(0, -0.36, -0.72), '#ffffff'), vc(boxG(0.06, 0.06, 1.5), M4(0, -0.72, 0), '#ffffff'),
     vc(new THREE.ConeGeometry(1.2, 0.5, 10), M4(0, -0.78, 0), '#b9b9c4'), vc(boxG(1.5, 0.08, 1.5), M4(0, -2.9, 0), '#d8d8e0')];
@@ -38,7 +47,6 @@ const _rm4 = new THREE.Matrix4(), _rv = new V3(), _rq = new THREE.Quaternion(), 
   im.castShadow = true; im.frustumCulled = false; world.add(im); W.pods = im;
   for (let i = 0; i < 36; i++) W.bulbs.push(bulb(W.x, W.y, W.z + 1.3, i, 0.09));
   for (let i = 0; i < 12; i++) W.bulbs.push(bulb(W.x, W.y, W.z + 1.3, i + 2, 0.08));
-  for (const i of W.bulbs) BULBS.list[i].noGlint = true;      // pas de traînée sur l'eau : la roue a son vrai reflet
   // portique d'embarquement
   for (const sx of [-1, 1]) { B.add(boxG(0.22, 3.4, 0.22), colorMat('#fff7ef'), M4(sx * 2.6, DECK + 1.7, -140.6), true, true); addCircle(sx * 2.6, -140.6, 0.2, 0, 3.4); }
   B.add(boxG(5.6, 0.9, 0.16), colorMat('#2e1f4a'), M4(0, DECK + 3.6, -140.6));
@@ -51,6 +59,7 @@ const _rm4 = new THREE.Matrix4(), _rv = new V3(), _rq = new THREE.Quaternion(), 
   B.add(cylG(5.3, 5.5, 0.3, 36), colorMat('#fff7ef'), M4(K.x, DECK + 0.15, K.z), true, true);
   B.add(new THREE.TorusGeometry(5.35, 0.09, 6, 40).rotateX(PI / 2), MAT.gold, M4(K.x, K.y, K.z));
   addFloorCircle(K.x, K.z, 5.4, K.y, { bois: true }); addCircle(K.x, K.z, 1.0, 0, 4);
+  glint(K.x, 4.6, K.z, '#ffd9a0', 0.75, 2.6);
   const gs = [];
   const cone = new THREE.ConeGeometry(5.7, 1.9, 16, 1, true).toNonIndexed(), val = cylG(5.7, 5.7, 0.55, 16, true).toNonIndexed();
   for (const [g, y] of [[cone, top + 0.95], [val, top - 0.27]]) {

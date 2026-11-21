@@ -1,0 +1,31 @@
+d.setTimeOfDay(215); const P = d.P; P.pos.set(2, 0.03, -30); P.vel.set(0, 0, 0); P.yaw = 0.1; P.pitch = 0.02; d.step(4, 0.03);
+---
+wait 1000
+---
+shot w_a
+---
+d.switchWeapon(1); d.step(14, 0.05);
+---
+wait 800
+---
+shot w_b
+---
+d.switchWeapon(2); d.step(14, 0.05);
+---
+wait 800
+---
+shot w_c
+---
+d.switchWeapon(3); d.step(14, 0.05);
+---
+wait 800
+---
+shot w_d
+---
+d.switchWeapon(0); d.step(14, 0.05); d.setTimeOfDay(430); d.step(2, 0.03);
+---
+wait 1200
+---
+shot w_e
+---
+return JSON.stringify({ yaw: d.P.yaw, cur: d.WPN.cur, st: typeof d.setState })

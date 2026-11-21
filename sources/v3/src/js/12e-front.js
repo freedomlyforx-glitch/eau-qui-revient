@@ -23,18 +23,24 @@ const cylG = (r0, r1, h, n, open) => new THREE.CylinderGeometry(r0, r1, h, n || 
   kitRail(Q.ex0 + 0.1, Q.ez1, Q.x0, Q.ez1, DECK); kitRail(Q.x1, Q.ez1, Q.ex1 - 0.1, Q.ez1, DECK);
   kitRail(Q.ex0 + 0.1, Q.ez1, Q.ex0 + 0.1, Q.ez0, DECK); kitRail(Q.ex1 - 0.1, Q.ez1, Q.ex1 - 0.1, Q.ez0, DECK);
   kitRail(Q.ex0 + 0.1, Q.ez0 + 0.1, Q.ex1 - 0.1, Q.ez0 + 0.1, DECK);
-  // mâts et guirlandes
-  const mast = (x, z, h) => B.add(cylG(0.045, 0.06, h, 8), MAT.white, M4(x, DECK + h / 2, z));
+  // mâts à lanterne et guirlandes (une lanterne sur deux se reflète dans la mer : des traînées nettes plutôt qu'un voile)
+  const mast = (x, z, h, refl) => { B.add(cylG(0.045, 0.06, h, 8), MAT.white, M4(x, DECK + h / 2, z)); B.add(cylG(0.12, 0.07, 0.1, 10), MAT.gold, M4(x, DECK + h + 0.03, z)); lantern(x, DECK + h + 0.22, z, '#ffd9a0', 0.15, { halo: 2.5, hk: 1.15, glint: refl ? 0.95 : 0, gw: 1.1 }); };
   let k = 0;
   for (let z = -6; z >= -114; z -= 12, k++) {
-    mast(-6.6, z, 4.2); mast(6.6, z, 4.2);
+    mast(-6.6, z, 4.2, k % 2 === 1); mast(6.6, z, 4.2, k % 2 === 0);
+    if (k % 2 === 0) addSoft(0, 3.7, z, '#ffd2a0', 2.1, 11.5);
+    // lampes sous le tablier, chaudes ou turquoise, et liseré de néon le long des planches
+    if (k % 2 === 1) for (const sx of [-1, 1]) { const col = (k + (sx > 0 ? 2 : 0)) % 4 === 1 ? '#ffb86a' : '#6ff2e2'; B.add(boxG(0.16, 0.1, 0.16), MAT.trunk, M4(sx * 5.7, -0.56, z)); lantern(sx * 5.7, -0.72, z, col, 0.11, { halo: 1.5, hk: 0.9, glint: 1.05, gw: 1.5 }); }
+    if (k % 2 === 0) { glint(-7.05, -0.1, z, '#ff6fc8', 1.0, 2.2); glint(7.05, -0.1, z, '#6feaff', 1.0, 2.2); }
     bulbString(-6.6, 4.2, z, 6.6, 4.2, z, 9, 0.55, k);
     if (z > -114) { bulbString(-6.6, 4.2, z, -6.6, 4.2, z - 12, 8, 0.4, k + 2); bulbString(6.6, 4.2, z, 6.6, 4.2, z - 12, 8, 0.4, k + 4); }
   }
   for (const [ax, az, bx, bz] of [[-26.5, -118.4, -26.5, -165.6], [26.5, -118.4, 26.5, -165.6], [-26.5, -165.6, 26.5, -165.6]]) {
     const n = Math.round(Math.hypot(bx - ax, bz - az) / 11.8);
-    for (let i = 0; i <= n; i++) { const x = lerp(ax, bx, i / n), z = lerp(az, bz, i / n); mast(x, z, 3.6); if (i < n) bulbString(x, 3.6, z, lerp(ax, bx, (i + 1) / n), 3.6, lerp(az, bz, (i + 1) / n), 8, 0.4, i); }
+    for (let i = 0; i <= n; i++) { const x = lerp(ax, bx, i / n), z = lerp(az, bz, i / n); mast(x, z, 3.6, i % 2 === 0); if (i < n) bulbString(x, 3.6, z, lerp(ax, bx, (i + 1) / n), 3.6, lerp(az, bz, (i + 1) / n), 8, 0.4, i); }
   }
+  B.add(boxG(0.05, 0.05, 117.6), neonMat('#ff7fcf'), M4(Q.x0 - 0.03, -0.1, -59.2)); B.add(boxG(0.05, 0.05, 117.6), neonMat('#7ff0ff'), M4(Q.x1 + 0.03, -0.1, -59.2));
+  B.add(boxG(54.1, 0.05, 0.05), neonMat('#b98cff'), M4(0, -0.1, Q.ez0 - 0.03));
   // arche d'entrée
   for (const x of [-6.7, 6.7]) B.add(boxG(0.4, 5.4, 0.4), colorMat('#fff7ef'), M4(x, 2.7, -1.2), true, true);
   B.add(boxG(13.8, 1.5, 0.3), colorMat('#2e1f4a'), M4(0, 5.4, -1.2), true, true);
@@ -42,6 +48,8 @@ const cylG = (r0, r1, h, n, open) => new THREE.CylinderGeometry(r0, r1, h, n || 
   kitSign('LA JETÉE DES RÊVES', '#7ff0ff', 0, 5.42, -1.37, PI, 11.5, 1.25, 3);
   bulbString(-6.7, 6.3, -1.2, 6.7, 6.3, -1.2, 16, 0, 1);
   addBox(-6.7, -1.2, 0.22, 0.22, 0, 0, 5.4); addBox(6.7, -1.2, 0.22, 0.22, 0, 0, 5.4);
+  for (const s of [-1, 1]) { B.add(boxG(13.9, 0.045, 0.045), neonMat('#ff8fcf'), M4(0, 5.4 + s * 0.78, -1.02)); B.add(boxG(13.9, 0.045, 0.045), neonMat('#7ff0ff'), M4(0, 5.4 + s * 0.78, -1.38)); }
+  glint(0, 5.4, -1.4, '#7ff0ff', 0.7, 3.2);
   // bancs face au large
   for (const z of [-92, -104]) { bench(-6.1, z, PI / 2); bench(6.1, z, -PI / 2); }
 })();
@@ -49,17 +57,23 @@ const cylG = (r0, r1, h, n, open) => new THREE.CylinderGeometry(r0, r1, h, n || 
 /* ---------- une baraque : fond contre le garde-corps, comptoir côté allée ---------- */
 function stand(nom, zc, side, titre, c1, c2, signCol) {
   const xb = side * 6.7, xf = side * 3.75, L = 5.2, H = 2.9, mx = (xb + xf) / 2, w = Math.abs(xb - xf);
-  const wall = colorMat(c1), pale = colorMat('#fff7ef');
+  // murs en bardage peint (planches horizontales), le reste en bois laqué uni
+  const wall = cached('stw' + c1, () => std({ color: C(c1), map: T.siding, roughness: 0.82 })), paleW = cached('stwp', () => std({ color: C('#fff7ef'), map: T.siding, roughness: 0.82 })), pale = colorMat('#fff7ef');
   const aw = cached('aw' + c1 + c2, () => std({ color: C('#ffffff'), map: stripeTex(c1, c2, 10), roughness: 0.8, side: THREE.DoubleSide }));
   // fond et côtés en panneaux qu'on peut démolir au tir (ils se relèvent tout seuls)
   kitWall('z', xb, zc - L / 2, zc + L / 2, DECK, H, [], wall, wall, side, 0.12);
-  for (const s of [-1, 1]) kitWall('x', zc + s * L / 2, Math.min(xb, xf), Math.max(xb, xf), DECK, H, [], pale, pale, s, 0.12);
+  for (const s of [-1, 1]) kitWall('x', zc + s * L / 2, Math.min(xb, xf), Math.max(xb, xf), DECK, H, [], paleW, paleW, s, 0.12);
   B.add(boxG(0.5, 1.0, L), pale, M4(xf, DECK + 0.5, zc), true, true);
   B.add(boxG(0.62, 0.07, L + 0.1), colorMat(c2), M4(xf, DECK + 1.03, zc), true, true);
   B.add(boxG(w + 0.5, 0.14, L + 0.3), pale, M4(mx, DECK + H + 0.07, zc), true, true);
   B.add(boxG(1.7, 0.05, L + 0.4), aw, M4(xf - side * 0.75, DECK + H - 0.22, zc, 0, 0, -side * 0.34), true, true);
   B.add(boxG(0.1, 1.15, L - 0.2), colorMat('#2e1f4a'), M4(xf + side * 0.12, DECK + H + 0.72, zc));
   kitSign(titre, signCol, xf + side * 0.05, DECK + H + 0.72, zc, -side * PI / 2, L - 0.6, 0.95, 1.7);
+  // cadre de néon autour de l'enseigne, liseré sous l'auvent, et le reflet de l'ensemble sur la mer
+  { const nm = neonMat(signCol), xs = xf + side * 0.045, yc = DECK + H + 0.72;
+    for (const s of [-1, 1]) { B.add(boxG(0.035, 0.035, L - 0.2), nm, M4(xs, yc + s * 0.56, zc)); B.add(boxG(0.035, 1.15, 0.035), nm, M4(xs, yc, zc + s * (L / 2 - 0.1))); }
+    B.add(boxG(0.03, 0.03, L + 0.2), nm, M4(xf - side * 0.3, DECK + H + 0.11, zc));
+    glint(xf, yc, zc, signCol, 1.1, 2.0); }
   bulbString(xf - side * 0.1, DECK + H + 1.42, zc - L / 2, xf - side * 0.1, DECK + H + 1.42, zc + L / 2, 11, 0, zc | 0);
   addBox(xf, zc, 0.3, L / 2, 0, DECK, 1.08);
   addSoft(mx, 2.35, zc, '#ffe2b0', 1.5, 6.5);
@@ -167,6 +181,7 @@ stand('guichet', -62, 1, 'GUICHET DES RECORDS', '#ffe68f', '#a9e3cb', '#ffd27a')
 })();
 
 function updateFront(dt) {
+  updateNeons();
   FRONT.t += dt;
   const n = NIGHT.value;
   if (FRONT.beam) { FRONT.beam.rotation.y = FRONT.t * 0.42; FRONT.beam.visible = n > 0.05; FRONT.beamMat.opacity = 0.1 * n; FRONT.lantern.material.color.setScalar(0.6 + 2.6 * n).multiply(_fc); }

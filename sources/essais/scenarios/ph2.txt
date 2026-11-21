@@ -1,0 +1,5 @@
+d.setTimeOfDay(430); d.P.pos.set(3, 0.03, -20); d.P.yaw = 0.25; d.P.pitch = 0.04; d.step(3, 0.03); return JSON.stringify({ pr: d.renderer.getPixelRatio(), refl: d.seaMat.uniforms.uReflOn.value })
+---
+wait 2500
+---
+shot ph_b

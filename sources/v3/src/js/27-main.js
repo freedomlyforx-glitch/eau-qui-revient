@@ -98,7 +98,7 @@ function simulate(rdt, render) {
     attractT += rdt; const t = attractT;
     camera.position.set(Math.sin(t * 0.05) * 5, 1.9 + Math.sin(t * 0.2) * 0.08, 9 + Math.sin(t * 0.031) * 3);
     camera.rotation.set(0.05 + Math.sin(t * 0.07) * 0.03, Math.sin(t * 0.045) * 0.5, 0);
-    gunRoot.position.set(0.17, -0.225 + Math.sin(t * 1.2) * 0.003, -0.47); gunRoot.rotation.set(0, 0.035, 0);
+    gunRoot.position.set(0.185, -0.245 + Math.sin(t * 1.2) * 0.003, -0.5); gunRoot.rotation.set(0, 0.035, 0);
     players[0].x = camera.position.x; players[0].z = camera.position.z - 30; players[0].y = 0;
   }
   if (playing && !PC.phase) updateWeapon(gdt, mv);

@@ -83,88 +83,115 @@ const HM = (() => {
   t.magFilter = t.minFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
   return { t, r: new THREE.Vector4(x0, z0, 1 / ((w - 1) * d), 1 / ((h - 1) * d)), packed: !isWebGL2 };
 })();
-const WAVE_GLSL = 'float wv(vec2 p, float t){ return sin(dot(p, vec2(0.05, 0.12)) + t*0.9)*0.5 + sin(dot(p, vec2(-0.14, 0.08)) + t*1.25)*0.3 + sin(dot(p, vec2(0.22, 0.2)) - t*1.7)*0.2; }\nvec2 wvG(vec2 p, float t){ return vec2(0.05, 0.12)*cos(dot(p, vec2(0.05, 0.12)) + t*0.9)*0.5 + vec2(-0.14, 0.08)*cos(dot(p, vec2(-0.14, 0.08)) + t*1.25)*0.3 + vec2(0.22, 0.2)*cos(dot(p, vec2(0.22, 0.2)) - t*1.7)*0.2; }';
+/* la houle : six trains de vagues à crête pointue. Les plus courts s'effacent avec la distance (dq),
+   pour que la maille de la mer, plus lâche au loin, ne se mette jamais à trembler. */
+const WAVES = [[0.25, 0.97, 46, 0.15], [-0.5, 0.87, 27, 0.085], [0.6, 0.8, 13, 0.07], [-0.3, 0.95, 7.5, 0.05], [0.85, 0.5, 4.1, 0.028], [-0.75, 0.66, 2.6, 0.016]];
+const WAVE_GLSL = 'void wave1(vec2 p, float t, vec2 D, float k, float w, float A, inout float h, inout vec2 g){ float th = dot(p, D) * k + t * w, s = 0.5 + 0.5 * sin(th), q = pow(s, 0.7); h += A * (2.0 * q * s - 0.81); g += D * (A * 1.7 * k * q * cos(th)); }\n' +
+  'float seaWaves(vec2 p, float t, float dq, out vec2 g){ float h = 0.0; g = vec2(0.0);\n' +
+  WAVES.map(([dx, dz, L, A]) => { const l = Math.hypot(dx, dz), k = 2 * PI / L, w = Math.sqrt(9.81 * k) * 0.62, f = (v) => v.toFixed(5);
+    return '  wave1(p, t, vec2(' + f(dx / l) + ', ' + f(dz / l) + '), ' + f(k) + ', ' + f(-w) + ', ' + f(A) + ' * (1.0 - smoothstep(' + f(L * 2.7) + ', ' + f(L * 5.4) + ', dq)), h, g);'; }).join('\n') + '\n  return h; }';
+const SEA_GRID = { ultra: [192, 1.042], haute: [160, 1.05], moyenne: [112, 1.07], basse: [80, 1.1] }[qualiteNom] || [160, 1.05];
+const HM_GLSL = (name) => 'float ' + name + '(vec2 p){ float v = texture2D(uHM, (p - uHMr.xy) * uHMr.zw).r; return ' + (HM.packed ? 'v * 32.0 - 13.0' : 'v') + '; }';
 const seaMat = new THREE.ShaderMaterial({
   uniforms: Object.assign({
-    uTime: clockU, uSeaY: terrainU.uSeaY, uNight: NIGHT, uHM: { value: HM.t }, uHMr: { value: HM.r }, uAmp: { value: 0.17 },
-    uSunDir: { value: SKY_SUN }, uSunCol: { value: HDR('#ffd0a8', 5.5) }, uMoonDir: { value: LIGHT_DIR }, uMoonCol: { value: HDR('#cfd8ff', 2.2) },
+    uTime: clockU, uSeaY: terrainU.uSeaY, uNight: NIGHT, uHM: { value: HM.t }, uHMr: { value: HM.r }, uGeo: { value: 0.05 / (SEA_GRID[1] - 1) }, uCalm: { value: 0 }, uNet: { value: 0.25 },
+    uSunDir: { value: SKY_SUN }, uSunCol: { value: HDR('#ffd0a8', 5.5) }, uMoonDir: { value: LIGHT_DIR }, uMoonCol: { value: HDR('#d6dcff', 2.3) },
     uRip: { value: SEA.ripples }, uC: { value: new THREE.Vector2(SEA.cx, SEA.cz) }, uFW: { value: new V3() },
     uFogColor: FOG.color, uFogDensity: FOG.density, uFogSun: FOGU.sun, uFogSunCol: FOGU.col,
     uWN: { value: T.waterN }, uRefl: { value: null }, uReflM: { value: new THREE.Matrix4() }, uReflOn: { value: 0 }
   }, SKYU),
   vertexShader: [
-    'uniform float uTime, uAmp; varying vec3 vW;', WAVE_GLSL,
-    'void main(){ vec4 w = modelMatrix * vec4(position, 1.0); float k = 1.0 - smoothstep(180.0, 560.0, length(w.xz - cameraPosition.xz)); w.y += wv(w.xz, uTime) * uAmp * k; vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }'
+    'uniform float uTime, uSeaY, uGeo, uCalm; uniform sampler2D uHM; uniform vec4 uHMr; varying vec3 vW;', WAVE_GLSL, HM_GLSL('terrHv'),
+    'void main(){',
+    '  vec2 xz = position.xz + cameraPosition.xz; float d = length(position.xz);',
+    // les vagues s'aplatissent là où l'eau est peu profonde, et autour du nageur pour ne pas lui passer par-dessus la tête
+    '  float shoal = smoothstep(0.05, 1.7, uSeaY - terrHv(xz)) * mix(1.0, smoothstep(1.0, 9.0, d), uCalm);',
+    '  vec2 g; float h = seaWaves(xz, uTime, d / uGeo, g) * shoal;',
+    '  vW = vec3(xz.x, uSeaY + h, xz.y);',
+    '  gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);',
+    '}'
   ].join('\n'),
   fragmentShader: [
-    'uniform float uTime, uSeaY, uNight, uAmp, uReflOn, uFogDensity; uniform sampler2D uHM, uWN, uRefl; uniform mat4 uReflM; uniform vec4 uHMr; uniform vec3 uSunDir, uSunCol, uMoonDir, uMoonCol, uFW, uFogColor, uFogSun, uFogSunCol; uniform vec4 uRip[6]; uniform vec2 uC;',
-    'varying vec3 vW;', SKY_GLSL, WAVE_GLSL,
-    'float terrH(vec2 p){ float v = texture2D(uHM, (p - uHMr.xy) * uHMr.zw).r; return ' + (HM.packed ? 'v * 32.0 - 13.0' : 'v') + '; }',
+    'uniform float uTime, uSeaY, uNight, uReflOn, uFogDensity, uCalm, uNet; uniform sampler2D uHM, uWN, uRefl; uniform mat4 uReflM; uniform vec4 uHMr; uniform vec3 uSunDir, uSunCol, uMoonDir, uMoonCol, uFW, uFogColor, uFogSun, uFogSunCol; uniform vec4 uRip[6]; uniform vec2 uC;',
+    'varying vec3 vW;', (qualiteNom === 'moyenne' || qualiteNom === 'basse') ? '#define SKY_LITE' : '', SKY_GLSL, WAVE_GLSL, CAUSTIC_FN, HM_GLSL('terrH'),
+    // éclat d'un astre sur l'eau : loi de Beckmann sur la demi-direction, qui étire d'elle-même le reflet vers l'horizon
+    'float glit(vec3 N, vec3 V, vec3 L, float s2){ vec3 H = normalize(V + L); float nh = max(dot(N, H), 1e-3), n2 = nh * nh; return exp((n2 - 1.0) / (n2 * s2)) / (s2 * n2 * n2); }',
     'void main(){',
     '  vec2 p = vW.xz; float t = uTime; vec3 Vd = cameraPosition - vW; float dist = length(Vd); vec3 V = Vd / dist;',
     '  float depth = uSeaY - terrH(p);',
     '  if (depth < -0.35) discard;',
     '  float near = 1.0 - smoothstep(50.0, 380.0, dist);',
-    // houle large (calculée) + trois couches de vaguelettes (carte de relief qui défile) ; l'eau se calme tout au bord
-    '  vec2 g = wvG(p, t) * uAmp * 2.2;',
+    '  float shoal = smoothstep(0.05, 1.7, depth) * mix(1.0, smoothstep(1.0, 9.0, length(Vd.xz)), uCalm);',
+    // houle et vagues (les mêmes que le relief de la maille), puis trois couches de vaguelettes ; l'eau se calme tout au bord
+    '  vec2 g; float wh = seaWaves(p, t, dist * 0.2, g) * shoal; g *= shoal;',
     '  vec2 a1 = texture2D(uWN, p * 0.041 + vec2(t * 0.011, t * 0.007)).xy - 0.5, a2 = texture2D(uWN, p * 0.117 + vec2(-t * 0.019, t * 0.015)).xy - 0.5, a3 = texture2D(uWN, p * 0.39 + vec2(t * 0.027, -t * 0.036)).xy - 0.5;',
-    '  g -= (a1 * 0.5 + a2 * 0.36 * near + a3 * 0.26 * near) * mix(0.45, 1.0, smoothstep(0.0, 1.6, depth));',
+    '  float close = 1.0 - smoothstep(6.0, 55.0, dist);',
+    '  vec2 gd = a1 * 0.55 + a2 * (0.36 + 0.3 * close) * near + a3 * (0.26 + 0.34 * close) * near;',
+    '  if (dist < 28.0) gd += (texture2D(uWN, p * 1.63 + vec2(-t * 0.05, t * 0.04)).xy - 0.5) * 0.3 * (1.0 - dist / 28.0);',
+    '  g -= gd * mix(0.45, 1.0, smoothstep(0.0, 1.6, depth));',
     '  float sp = texture2D(uNoise, p * 0.31 + t * 0.02).a;',
     '  float foamR = 0.0;',
     '  for (int i = 0; i < 6; i++) { vec4 r = uRip[i]; float age = t - r.z; if (age > 0.0 && age < 4.0) { vec2 dv = p - uC - r.xy; float d = length(dv); float w = sin((d - age*2.4)*5.0) * exp(-abs(d - age*2.4)*1.1) * (1.0 - age/4.0) * r.w; g += dv / max(d, 0.01) * w * 0.3; foamR += max(w, 0.0) * 0.35; } }',
     '  vec3 N = normalize(vec3(-g.x, 1.0, -g.y));',
     '  bool below = cameraPosition.y < vW.y;',
     '  if (below) N = -N;',
-    '  float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, V), 0.0), 5.0);',
+    '  float nv = max(dot(N, V), 0.0), fres = 0.02 + 0.98 * pow(1.0 - nv, 5.0);',
     '  vec3 Rv = reflect(-V, N); Rv.y = abs(Rv.y) + 0.02; Rv = normalize(Rv);',
     '  vec3 sd = normalize(uSunDir), md = normalize(uMoonDir); float sunVis = smoothstep(-0.07, 0.02, sd.y);',
     '  vec3 ld = mix(sd, md, step(0.5, uNight));',
     '  vec3 refl = skyAt(Rv, ld);',
-    // reflet du décor (jetée, grande roue, lampions…) : image miroir rendue à part, troublée par les vagues
-    '  if (uReflOn > 0.5) { vec4 rc = uReflM * vec4(vW.x, uSeaY, vW.z, 1.0); vec2 ruv = rc.xy / rc.w + N.xz * 0.07 * clamp(14.0 / dist, 0.1, 1.0); vec3 pr = texture2D(uRefl, clamp(ruv, 0.002, 0.998)).rgb; refl = mix(refl, pr, mix(0.5, 0.86, clamp(40.0 / dist, 0.0, 1.0))); }',
+    // reflet du décor (jetée, grande roue, lampions…) : image miroir rendue à part, étirée vers le joueur par les vagues
+    '  if (uReflOn > 0.5) { vec4 rc = uReflM * vec4(vW.x, uSeaY, vW.z, 1.0); vec2 vd = normalize(Vd.xz + vec2(1e-4)); float tf = dot(N.xz, vd), ts = dot(N.xz, vec2(-vd.y, vd.x));',
+    '    vec2 ruv = rc.xy / rc.w + vec2(ts * 0.05, tf * 0.22) * clamp(20.0 / dist, 0.15, 1.0); vec3 pr = texture2D(uRefl, clamp(ruv, 0.002, 0.998)).rgb; refl = mix(refl, pr, mix(0.5, 0.86, clamp(40.0 / dist, 0.0, 1.0))); }',
     '  float dk = 1.0 - exp(-max(depth, 0.0) * 0.42);',
-    '  vec3 shallow = mix(vec3(0.20, 0.80, 0.78), vec3(0.04, 0.17, 0.30), uNight), deep = mix(vec3(0.04, 0.20, 0.46), vec3(0.012, 0.022, 0.09), uNight);',
+    '  vec3 shallow = mix(vec3(0.20, 0.80, 0.78), vec3(0.03, 0.21, 0.33), uNight), deep = mix(vec3(0.04, 0.20, 0.46), vec3(0.012, 0.045, 0.15), uNight);',
     '  vec3 body = mix(shallow, deep, dk);',
     '  body += vec3(0.10, 0.50, 0.44) * pow(max(dot(-V, sd), 0.0), 3.0) * 0.3 * sunVis * (1.0 - uNight);',
+    // la lumière traverse la crête des vagues ; sous la surface, un réseau de lumière danse près du joueur
+    '  body += mix(vec3(0.10, 0.55, 0.50), vec3(0.04, 0.34, 0.42), uNight) * smoothstep(0.05, 0.36, wh) * 0.35;',
+    '  float nk = (1.0 - smoothstep(7.0, 34.0, dist)) * (1.0 - fres) * uNet * (below ? 0.0 : 1.0);',
+    '  if (nk > 0.004) body += mix(vec3(0.35, 1.0, 0.9), vec3(0.22, 0.85, 1.0), uNight) * caustF(p * 0.95 + N.xz * 1.6, t * 0.7) * nk;',
     '  vec3 col = mix(body, refl, fres * 0.92);',
+    // le chemin de lumière du soleil et de la lune : chaque facette de vague tournée comme il faut renvoie l'astre
+    '  float s2 = mix(0.006, 0.05, smoothstep(6.0, 220.0, dist)), ik = 1.0 / max(nv, 0.06);',
+    '  float ks = min(glit(N, V, sd, s2 * 0.45) * 0.0123 * ik, 1.0), km = min(glit(N, V, md, s2) * 0.0057 * ik, 1.0);',
+    '  float fs = 0.3 + 0.7 * pow(1.0 - max(dot(V, normalize(V + sd)), 0.0), 5.0), fm = 0.3 + 0.7 * pow(1.0 - max(dot(V, normalize(V + md)), 0.0), 5.0);',
     '  float ca = max(dot(Rv, sd), 0.0);',
-    '  float spk = smoothstep(0.42, 0.85, sp), spk2 = smoothstep(0.56, 0.7, texture2D(uNoise, p * 0.9 - t * 0.05).a);',
-    '  col += uSunCol * (pow(ca, 380.0) * 6.0 * (0.25 + spk) + pow(ca, 40.0) * 0.14) * sunVis;',
-    '  float cm = max(dot(Rv, md), 0.0);',
-    '  col += uMoonCol * (pow(cm, 520.0) * 1.5 * (0.06 + spk2) + pow(cm, 60.0) * 0.04) * uNight;',
+    '  col += uSunCol * (ks * fs * 0.24 * (0.5 + sp) + pow(ca, 40.0) * 0.07) * sunVis;',
+    '  col += uMoonCol * km * fm * (0.55 + 0.9 * sp) * mix(1.0, 0.6, close) * uNight;',
     '  col += uFW * (0.25 + 0.75 * sp) * (0.3 + 0.7 * fres);',
-    // écume : la frange du rivage avance et recule, des traînées la suivent
+    // écume : la frange du rivage avance et recule, des traînées la suivent, et la crête des plus hautes vagues blanchit
     '  float fn = texture2D(uNoise, p * 0.085 + vec2(t * 0.012, -t * 0.008)).b, fn2 = texture2D(uNoise, p * 0.33 - t * 0.02).a;',
     '  float sw = sin(t*0.7 + p.x*0.11) * 0.07 + sin(t*1.1 - p.x*0.05) * 0.04;',
     '  float edge = smoothstep(0.5, 0.0, depth + sw + (fn - 0.5) * 0.3);',
     '  float lines = pow(max(0.0, sin(depth*5.5 + t*1.2 + fn*3.2)), 6.0) * smoothstep(1.7, 0.15, depth) * smoothstep(0.0, 0.1, depth);',
-    '  float foam = clamp(edge + lines*0.6 + foamR, 0.0, 1.0) * smoothstep(0.2, 0.55, fn2 + edge * 0.6);',
+    '  float crest = smoothstep(0.27, 0.43, wh) * (1.0 - smoothstep(40.0, 130.0, dist)) * 0.55;',
+    '  float foam = clamp(edge + lines*0.6 + foamR + crest, 0.0, 1.0) * smoothstep(0.2, 0.55, fn2 + edge * 0.6);',
     '  vec3 foamCol = mix(vec3(1.0, 0.96, 0.97), vec3(0.42, 0.45, 0.72), uNight * 0.8) + uGlow * 0.25 * sunVis;',
     '  col = mix(col, foamCol, foam * 0.92);',
     '  float alpha = mix(smoothstep(0.0, 0.3, depth) * 0.5 + dk * 0.46, 1.0, fres);',
     '  alpha = max(alpha, foam * 0.95) * smoothstep(-0.06, 0.02, depth + sw * 0.6);',
     '  if (below) { col = mix(vec3(0.20, 0.72, 0.80), skyGrad(vec3(0.0, 0.6, 0.0)), 0.35) * (0.6 + 0.6*sp) * (1.0 - uNight * 0.75); alpha = 0.82; }',
-    // au loin, la mer redevient la grille du rêve
-    '  float far = smoothstep(380.0, 900.0, dist);',
-    '  if (far > 0.001) { vec2 gq = p / 24.0; vec2 gf = abs(fract(gq - 0.5) - 0.5) / fwidth(gq); float gl = 1.0 - min(min(gf.x, gf.y), 1.0); col += vec3(1.0, 0.5, 0.82) * gl * far * 0.5; }',
-    '  float fogF = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist); float fs = max(dot(-V, uFogSun), 0.0);',
-    '  col = mix(col, uFogColor + uFogSunCol * (pow(fs, 8.0) * 0.85 + fs * fs * 0.15), clamp(fogF, 0.0, 1.0));',
+    // tout au loin, la mer redevient la grille du rêve
+    '  float far = smoothstep(520.0, 1300.0, dist);',
+    '  if (far > 0.001) { vec2 gq = p / 24.0; vec2 gf = abs(fract(gq - 0.5) - 0.5) / fwidth(gq); float gl = 1.0 - min(min(gf.x, gf.y), 1.0); col += vec3(1.0, 0.5, 0.82) * gl * far * 0.3; }',
+    '  float fogF = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist); float fgs = max(dot(-V, uFogSun), 0.0);',
+    '  col = mix(col, uFogColor + uFogSunCol * (pow(fgs, 8.0) * 0.85 + fgs * fgs * 0.15), clamp(fogF, 0.0, 1.0));',
     '  gl_FragColor = vec4(col, alpha);',
     '}'
   ].join('\n'),
   transparent: true, depthWrite: false, side: THREE.DoubleSide, extensions: { derivatives: true }
 });
 const sea = (() => {
-  // maille serrée près du rivage, de plus en plus lâche vers le large
-  const coords = [0], n0 = 58; let step = 4, v = 0;
-  for (let i = 1; i <= n0; i++) { v += 4; coords.push(v); }
-  for (let i = 0; i < 16; i++) { step *= 1.36; v += step; coords.push(v); }
-  const all = coords.slice(1).reverse().map((c) => -c).concat(coords), N = all.length;
-  const pos = new Float32Array(N * N * 3), idx = [];
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const k = (j * N + i) * 3; pos[k] = all[i]; pos[k + 1] = 0; pos[k + 2] = all[j] - 96; }
-  for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) { const a = j * N + i, b = a + 1, c = a + N, d = c + 1; idx.push(a, c, b, b, c, d); }
+  // maille en éventail centrée sur le joueur : très fine à ses pieds, de plus en plus lâche vers l'horizon
+  const NA = SEA_GRID[0], GR = SEA_GRID[1], radii = [0, 0.5];
+  while (radii[radii.length - 1] < 2400) radii.push(radii[radii.length - 1] * GR + 0.02);
+  const NR = radii.length, pos = new Float32Array(((NR - 1) * NA + 1) * 3), idx = [];
+  for (let i = 1; i < NR; i++) for (let a = 0; a < NA; a++) { const k = (1 + (i - 1) * NA + a) * 3, an = a / NA * 2 * PI; pos[k] = Math.cos(an) * radii[i]; pos[k + 2] = Math.sin(an) * radii[i]; }
+  for (let a = 0; a < NA; a++) idx.push(0, 1 + (a + 1) % NA, 1 + a);
+  for (let i = 1; i < NR - 1; i++) for (let a = 0; a < NA; a++) { const A = 1 + (i - 1) * NA + a, Bq = 1 + (i - 1) * NA + (a + 1) % NA, Cq = A + NA, Dq = Bq + NA; idx.push(A, Bq, Cq, Bq, Dq, Cq); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx);
-  const m = new THREE.Mesh(g, seaMat); m.frustumCulled = false; m.renderOrder = 1; m.userData.surface = 'eau'; m.position.y = SEA.surf; world.add(m);
+  const m = new THREE.Mesh(g, seaMat); m.frustumCulled = false; m.renderOrder = 1; m.userData.surface = 'eau'; world.add(m);
   return m;
 })();
 // bouées : la limite de la baignade
@@ -177,7 +204,8 @@ const buoys = new THREE.Group(); world.add(buoys);
 // l'eau revient : la mer monte à la tombée de la nuit, se retire au petit matin
 function updateSea(dt) {
   SEA.surf = SEA.low + SEA.range * smooth(0.15, 1, NIGHT.value);
-  terrainU.uSeaY.value = SEA.surf; sea.position.y = SEA.surf; buoys.position.y = SEA.surf + Math.sin(clockU.value * 0.9) * 0.06;
+  terrainU.uSeaY.value = SEA.surf; buoys.position.y = SEA.surf + Math.sin(clockU.value * 0.9) * 0.06;
+  const hc = camera.position.y - SEA.surf; seaMat.uniforms.uCalm.value = hc < 0 ? 1 : 1 - smooth(0.45, 1.3, hc); seaMat.uniforms.uNet.value = lerp(0.2, 0.34, NIGHT.value);
   const fw = seaMat.uniforms.uFW.value; fw.multiplyScalar(Math.exp(-dt * 2.2));
 }
 

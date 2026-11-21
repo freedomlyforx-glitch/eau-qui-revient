@@ -136,7 +136,17 @@ function kitSteps(x, z, dx, dz, w, y0, y1, n, mat) {
   }
 }
 /* ---------- ampoules : une seule maille pour toutes les guirlandes ---------- */
-const BULBS = { list: [], wires: [], mesh: null, glint: null, dyn: [] };
+const BULBS = { list: [], wires: [], mesh: null, glint: null, dyn: [], glints: [], halos: [], halo: null };
+// reflet d'une lumière sur la mer (k : éclat, w : largeur) et halo d'une lampe (size en mètres)
+const _colOf = (c) => (typeof c === 'string' ? C(c) : c);
+function glint(x, y, z, col, k, w) { BULBS.glints.push({ x, y: y + YOFF, z, c: _colOf(col), k: k === undefined ? 1 : k, w: w || 1 }); return BULBS.glints.length - 1; }
+function halo(x, y, z, col, size, k) { BULBS.halos.push({ x, y: y + YOFF, z, c: _colOf(col), s: size || 1.6, k: k === undefined ? 1 : k }); return BULBS.halos.length - 1; }
+// tubes néon : leur éclat monte à la tombée de la nuit
+const NEONS = [];
+function neonMat(col, k) { return cached('neon' + col + (k || ''), () => { const m = new THREE.MeshBasicMaterial({ color: C(col) }); NEONS.push({ m, c: C(col), k: k || 1 }); return m; }); }
+function updateNeons() { const s = lerp(1.15, 2.9, NIGHT.value); for (const n of NEONS) n.m.color.copy(n.c).multiplyScalar(s * n.k); }
+// lanterne : un globe lumineux, son halo et, si on le veut, sa traînée sur l'eau
+function lantern(x, y, z, col, r, o) { o = o || {}; bulb(x, y, z, col, r || 0.14); return { h: halo(x, y, z, col, o.halo || 1.7, o.hk), g: o.glint ? glint(x, y, z, col, o.glint, o.gw) : -1 }; }
 const BULB_COLS = ['#ffd27a', '#ff8fcf', '#7ff0ff', '#b98cff', '#a3f3dc', '#ffb07a'].map(C);
 function bulb(x, y, z, ci, s) { BULBS.list.push({ x, y: y + YOFF, z, c: typeof ci === 'number' ? BULB_COLS[((Math.floor(ci) % BULB_COLS.length) + BULB_COLS.length) % BULB_COLS.length] : C(ci), s: s || 0.07 }); return BULBS.list.length - 1; }
 function bulbString(ax, ay, az, bx, by, bz, n, sag, c0) {
@@ -159,42 +169,83 @@ function buildBulbs() {
   L.forEach((b, i) => { im.setMatrixAt(i, M4(b.x, b.y, b.z, 0, 0, 0, b.s, b.s, b.s)); im.setColorAt(i, b.c); });
   im.frustumCulled = false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); world.add(im); BULBS.mesh = im;
   if (BULBS.wires.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(BULBS.wires, 3)); const ln = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: C('#3a2f52') })); ln.frustumCulled = false; world.add(ln); }
-  // reflets des lumières sur la mer : une traînée par ampoule, placée là où l'œil la verrait dans un miroir
-  const G = L.map((b, i) => i).filter((i) => (L[i].z < 3 || L[i].glint) && L[i].y > -1.5 && !L[i].noGlint);
-  if (!G.length) return;
-  const g = new THREE.InstancedBufferGeometry(); const base = new THREE.PlaneGeometry(1, 1);
-  g.index = base.index; g.setAttribute('position', base.attributes.position);
-  const ap = new Float32Array(G.length * 3), ac = new Float32Array(G.length * 3);
-  G.forEach((bi, k) => { const b = L[bi]; ap.set([b.x, b.y, b.z], k * 3); ac.set([b.c.r, b.c.g, b.c.b], k * 3); b.gi = k; });
-  g.setAttribute('aPos', new THREE.InstancedBufferAttribute(ap, 3).setUsage(THREE.DynamicDrawUsage)); g.setAttribute('aCol', new THREE.InstancedBufferAttribute(ac, 3));
-  g.instanceCount = G.length;
-  const gm = new THREE.ShaderMaterial({
-    uniforms: { uTime: clockU, uNight: NIGHT, uSeaY: terrainU.uSeaY, uHM: { value: HM.t }, uHMr: { value: HM.r } },
-    vertexShader: [
-      'attribute vec3 aPos; attribute vec3 aCol; uniform float uSeaY, uTime; uniform sampler2D uHM; uniform vec4 uHMr; varying vec2 vQ; varying vec3 vC; varying float vK;',
-      'void main(){',
-      '  float hL = aPos.y - uSeaY, hC = cameraPosition.y - uSeaY;',
-      '  float tt = hC / max(hC + hL, 0.001);',
-      '  vec2 pm = mix(cameraPosition.xz, aPos.xz, tt);',
-      '  float th = texture2D(uHM, (pm - uHMr.xy) * uHMr.zw).r' + (HM.packed ? ' * 32.0 - 13.0' : '') + ';',
-      '  vK = step(0.05, hL) * step(0.05, hC) * smoothstep(0.0, 0.25, uSeaY - th);',
-      '  vec2 dir = normalize(pm - cameraPosition.xz + vec2(1e-4)); vec2 side = vec2(-dir.y, dir.x);',
-      '  float dC = length(pm - cameraPosition.xz);',
-      '  float len = clamp((hL * 1.6 + 1.2) * (0.5 + dC * 0.03), 0.8, 46.0), wid = 0.12 + dC * 0.0075;',
-      '  vec2 xz = pm + side * position.x * wid * 2.0 + dir * position.y * len;',
-      '  vQ = position.xy; vC = aCol; vK *= 1.0 - smoothstep(260.0, 420.0, dC);',
-      '  gl_Position = projectionMatrix * viewMatrix * vec4(xz.x, uSeaY + 0.24, xz.y, 1.0);',
-      '}'
-    ].join('\n'),
-    fragmentShader: 'uniform float uTime, uNight; varying vec2 vQ; varying vec3 vC; varying float vK; void main(){ float a = exp(-vQ.x * vQ.x * 22.0) * (1.0 - 4.0 * vQ.y * vQ.y); float sh = 0.55 + 0.45 * sin(vQ.y * 46.0 + uTime * 5.0 + vC.r * 20.0) * sin(vQ.y * 17.0 - uTime * 3.1); gl_FragColor = vec4(vC * a * sh * vK * (0.07 + 0.4 * uNight), 1.0); }',
-    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+  // reflets des lumières sur la mer : pour chaque lampe, une longue traînée qui part du point miroir
+  // (là où l'œil verrait la lampe dans une eau lisse) et s'étire vers le joueur, hachée par les vaguelettes
+  LAMP_HEADS.forEach((h) => {
+    h.fx = { h: BULBS.halos.length, g: -1 };
+    BULBS.halos.push({ x: h.x, y: h.y - 0.14, z: h.z, c: C('#ffcf9a'), s: 2.1, k: 0.9 });
+    if (h.z < 20) { h.fx.g = BULBS.glints.length; BULBS.glints.push({ x: h.x, y: h.y, z: h.z, c: C('#ffc98a'), k: 1.0, w: 1.2 }); }
   });
-  const gl = new THREE.Mesh(g, gm); gl.frustumCulled = false; gl.renderOrder = 4; world.add(gl); BULBS.glint = gl;
+  const GL = BULBS.glints;
+  if (GL.length) {
+    const g = new THREE.InstancedBufferGeometry(); const base = new THREE.PlaneGeometry(1, 1, 1, 12);
+    g.index = base.index; g.setAttribute('position', base.attributes.position);
+    const ap = new Float32Array(GL.length * 3), ac = new Float32Array(GL.length * 3), ak = new Float32Array(GL.length * 2);
+    GL.forEach((b, k) => { ap.set([b.x, b.y, b.z], k * 3); ac.set([b.c.r, b.c.g, b.c.b], k * 3); ak.set([b.k, b.w], k * 2); });
+    g.setAttribute('aPos', new THREE.InstancedBufferAttribute(ap, 3)); g.setAttribute('aCol', new THREE.InstancedBufferAttribute(ac, 3));
+    g.setAttribute('aPar', new THREE.InstancedBufferAttribute(ak, 2).setUsage(THREE.DynamicDrawUsage));
+    g.instanceCount = GL.length;
+    const gm = new THREE.ShaderMaterial({
+      uniforms: { uTime: clockU, uNight: NIGHT, uSeaY: terrainU.uSeaY, uHM: { value: HM.t }, uHMr: { value: HM.r }, uWN: { value: T.waterN }, uCalm: seaMat.uniforms.uCalm },
+      vertexShader: [
+        'attribute vec3 aPos, aCol; attribute vec2 aPar; uniform float uSeaY, uTime, uCalm; uniform sampler2D uHM; uniform vec4 uHMr; varying vec2 vQ, vXZ; varying vec3 vC; varying float vK;', WAVE_GLSL, HM_GLSL('terrHv'),
+        'void main(){',
+        '  float hL = aPos.y - uSeaY, hC = cameraPosition.y - uSeaY;',
+        '  vec2 dv0 = aPos.xz - cameraPosition.xz; float dT = length(dv0); vec2 dir = dv0 / max(dT, 1e-3), side = vec2(-dir.y, dir.x);',
+        '  float dM = dT * hC / max(hC + hL, 0.001);',
+        '  float s = position.y + 0.5;',
+        '  float dN = dM * 0.16 + 0.6, dF = dM + min((dT - dM) * 0.45, 14.0);',
+        '  float dA = s < 0.75 ? mix(dN, dM, s / 0.75) : mix(dM, dF, (s - 0.75) / 0.25);',
+        '  float wid = (0.011 * dA + 0.06) * aPar.y;',
+        '  vec2 xz = cameraPosition.xz + dir * dA + side * position.x * 2.0 * wid;',
+        '  float depth = uSeaY - terrHv(xz);',
+        '  float shoal = smoothstep(0.05, 2.4, depth) * mix(1.0, smoothstep(1.0, 9.0, dA), uCalm);',
+        '  vec2 gg; float h = seaWaves(xz, uTime, dA * 1.4, gg) * shoal;',
+        '  float fall = s < 0.75 ? pow(s / 0.75, 1.6) : 1.0 - (s - 0.75) / 0.25;',
+        '  vK = aPar.x * fall * step(0.05, hL) * step(0.3, hC) * smoothstep(0.0, 0.3, depth) * (1.0 - smoothstep(260.0, 420.0, dT));',
+        '  vQ = position.xy; vXZ = xz; vC = aCol;',
+        '  gl_Position = projectionMatrix * viewMatrix * vec4(xz.x, uSeaY + h + 0.07, xz.y, 1.0);',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform float uTime, uNight; uniform sampler2D uWN; varying vec2 vQ, vXZ; varying vec3 vC; varying float vK;',
+        'void main(){',
+        '  vec2 w = texture2D(uWN, vXZ * 0.19 + vec2(uTime * 0.03, -uTime * 0.045)).xy - 0.5; float w2 = texture2D(uWN, vXZ * 0.06 - uTime * 0.017).y - 0.5;',
+        '  float x = vQ.x + w.x * 0.5;',
+        '  float a = exp(-x * x * 20.0) * smoothstep(-0.07, 0.07, w.y + w2 * 0.9 + 0.02);',
+        '  gl_FragColor = vec4(vC * a * vK * (0.04 + 0.96 * smoothstep(0.05, 0.7, uNight)), 1.0); }'
+      ].join('\n'),
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const gl = new THREE.Mesh(g, gm); gl.frustumCulled = false; gl.renderOrder = 4; world.add(gl); BULBS.glint = gl;
+  }
+  // halos des lampes : un disque de lueur toujours tourné vers l'œil, qui s'allume à la tombée de la nuit
+  const HL = BULBS.halos;
+  if (HL.length) {
+    const g = new THREE.InstancedBufferGeometry(); const base = new THREE.PlaneGeometry(1, 1);
+    g.index = base.index; g.setAttribute('position', base.attributes.position);
+    const ap = new Float32Array(HL.length * 4), ac = new Float32Array(HL.length * 4);
+    HL.forEach((b, k) => { ap.set([b.x, b.y, b.z, b.s], k * 4); ac.set([b.c.r, b.c.g, b.c.b, b.k], k * 4); });
+    g.setAttribute('aPos', new THREE.InstancedBufferAttribute(ap, 4)); g.setAttribute('aCol', new THREE.InstancedBufferAttribute(ac, 4).setUsage(THREE.DynamicDrawUsage));
+    g.instanceCount = HL.length;
+    const hm = new THREE.ShaderMaterial({
+      uniforms: { uNight: NIGHT, uTime: clockU, uFogDensity: FOG.density },
+      vertexShader: 'attribute vec4 aPos, aCol; uniform float uNight, uTime, uFogDensity; varying vec2 vQ; varying vec3 vC; void main(){ vec4 mv = viewMatrix * vec4(aPos.xyz, 1.0); float d = -mv.z; mv.xy += position.xy * aPos.w * (1.0 + d * 0.012); vQ = position.xy * 2.0; float fl = 0.92 + 0.08 * sin(uTime * 3.1 + aPos.x * 1.7 + aPos.z); vC = aCol.rgb * aCol.a * fl * smoothstep(0.1, 0.7, uNight) * exp(-uFogDensity * uFogDensity * d * d * 0.5); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'varying vec2 vQ; varying vec3 vC; void main(){ float r = length(vQ); float a = pow(max(1.0 - r, 0.0), 2.4) * 0.5 + exp(-r * r * 26.0) * 0.6; gl_FragColor = vec4(vC * a, 1.0); }',
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const hmesh = new THREE.Mesh(g, hm); hmesh.frustumCulled = false; hmesh.renderOrder = 5; world.add(hmesh); BULBS.halo = hmesh;
+  }
 }
-// déplace une ampoule (grande roue, manèges) : met aussi à jour son reflet
+// allume ou éteint le halo et la traînée d'une lampe (quand on la casse, quand elle se rallume)
+function setLightFx(fx, on) {
+  if (!fx) return;
+  if (fx.h >= 0 && BULBS.halo) { const a = BULBS.halo.geometry.attributes.aCol; a.setW(fx.h, on ? BULBS.halos[fx.h].k : 0); a.needsUpdate = true; }
+  if (fx.g >= 0 && BULBS.glint) { const a = BULBS.glint.geometry.attributes.aPar; a.setX(fx.g, on ? BULBS.glints[fx.g].k : 0); a.needsUpdate = true; }
+}
+// déplace une ampoule (grande roue, manèges)
 const _bm4 = new THREE.Matrix4();
 function moveBulb(i, x, y, z) {
   const b = BULBS.list[i]; b.x = x; b.y = y; b.z = z;
   if (BULBS.mesh) { _bm4.makeScale(b.s, b.s, b.s).setPosition(x, y, z); BULBS.mesh.setMatrixAt(i, _bm4); }
-  if (BULBS.glint && b.gi !== undefined) { const a = BULBS.glint.geometry.attributes.aPos; a.setXYZ(b.gi, x, y, z); a.needsUpdate = true; }
 }

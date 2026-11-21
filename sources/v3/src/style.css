@@ -98,7 +98,7 @@ h1{margin:0;font-family:var(--f-titre);font-style:italic;font-weight:600;line-he
 }
 
 /* ---------- interface en jeu ---------- */
-.hud{position:fixed;inset:0;z-index:10;pointer-events:none;text-shadow:0 0 10px rgba(255,159,205,.55),0 1px 0 rgba(40,20,60,.5)}
+.hud{position:fixed;inset:0;z-index:10;pointer-events:none;text-shadow:0 0 10px rgba(255,159,205,.55),0 1px 0 rgba(40,20,60,.6),0 0 4px rgba(40,20,60,.5)}
 .vhs{position:absolute;top:max(16px,env(safe-area-inset-top,0px));left:max(20px,env(safe-area-inset-left,0px));font-size:24px;line-height:1.05;letter-spacing:.06em}
 .vhs .ligne{display:flex;align-items:center;gap:10px}
 .vhs .point{width:12px;height:12px;border-radius:50%;background:var(--rose);box-shadow:0 0 10px var(--rose);animation:clignote 1.2s steps(1) infinite}
@@ -108,6 +108,14 @@ h1{margin:0;font-family:var(--f-titre);font-style:italic;font-weight:600;line-he
 .score .etiquette{display:block;font-size:19px;letter-spacing:.3em;color:var(--menthe)}
 .score .valeur{display:block;font-size:60px;line-height:.9;font-variant-numeric:tabular-nums}
 .score .joueurs{display:block;font-size:19px;color:var(--encre-douce);margin-top:4px}
+.rang{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+.ico{width:34px;height:34px;flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;opacity:.9;filter:drop-shadow(0 0 6px rgba(255,159,205,.55))}
+.score .ico{color:var(--menthe)}
+.coin{position:absolute;width:22px;height:22px;border:0 solid rgba(255,245,250,.5);filter:drop-shadow(0 0 5px rgba(255,159,205,.5))}
+.coin.c1{left:max(8px,env(safe-area-inset-left,0px));top:max(8px,env(safe-area-inset-top,0px));border-left-width:2px;border-top-width:2px}
+.coin.c2{right:max(8px,env(safe-area-inset-right,0px));top:max(8px,env(safe-area-inset-top,0px));border-right-width:2px;border-top-width:2px}
+.coin.c3{left:max(8px,env(safe-area-inset-left,0px));bottom:max(8px,env(safe-area-inset-bottom,0px));border-left-width:2px;border-bottom-width:2px}
+.coin.c4{right:max(8px,env(safe-area-inset-right,0px));bottom:max(8px,env(safe-area-inset-bottom,0px));border-right-width:2px;border-bottom-width:2px}
 .fil{position:absolute;top:calc(max(16px,env(safe-area-inset-top,0px)) + 112px);right:max(20px,env(safe-area-inset-right,0px));display:grid;gap:3px;justify-items:end;font-size:19px;color:var(--encre)}
 .fil div{background:rgba(28,20,48,.45);padding:1px 8px;animation:filsort 6s forwards}
 @keyframes filsort{0%,85%{opacity:1}100%{opacity:0}}
@@ -135,7 +143,11 @@ h1{margin:0;font-family:var(--f-titre);font-style:italic;font-weight:600;line-he
   background:linear-gradient(var(--rose),var(--rose)) center/2px 100% no-repeat,linear-gradient(var(--rose),var(--rose)) center/100% 2px no-repeat}
 .lunette::after{content:"";position:absolute;left:50%;top:50%;width:10px;height:10px;transform:translate(-50%,-50%);border-radius:50%;background:var(--menthe);box-shadow:0 0 12px var(--menthe)}
 .armes{position:absolute;right:max(24px,env(safe-area-inset-right,0px));bottom:max(20px,env(safe-area-inset-bottom,0px));text-align:right;display:grid;justify-items:end;gap:2px}
-.armes .nom{font-size:20px;letter-spacing:.3em;color:var(--lilas)}
+.armes .nom{font-size:20px;letter-spacing:.3em;color:var(--lilas);display:flex;align-items:center;gap:10px}
+.armes .nom::before,.armes .nom::after{content:"";width:22px;height:1px;background:currentColor;opacity:.6}
+.jauge{width:150px;height:4px;background:rgba(255,245,250,.16);margin-top:5px}
+.jauge i{display:block;height:100%;background:linear-gradient(90deg,var(--lilas),var(--rose));transform-origin:left;transition:transform .08s}
+.armes.vide .jauge i{background:var(--peche)}
 .armes .munitions{font-size:64px;line-height:.9;font-variant-numeric:tabular-nums}
 .armes .munitions small{font-size:28px;color:var(--encre-douce);margin-left:6px}
 .armes .recharge{font-size:21px;letter-spacing:.2em;color:var(--peche);opacity:0;transition:opacity .15s}
@@ -237,6 +249,11 @@ body.mobile .armes .munitions{font-size:30px}
 body.mobile .armes .nom{font-size:15px}
 body.mobile .armes .munitions small{font-size:18px}
 body.mobile .emplacements{display:none}
+body.mobile .jauge{width:86px;height:3px;margin-top:2px}
+body.mobile .armes .nom::before,body.mobile .armes .nom::after{width:12px}
+body.mobile .ico{width:20px;height:20px}
+body.mobile .rang{gap:7px}
+body.mobile .coin{width:14px;height:14px;opacity:.7}
 body.mobile #radar{left:max(14px,env(safe-area-inset-left,0px));top:calc(max(12px,env(safe-area-inset-top,0px)) + 40px);bottom:auto;width:112px;height:112px}
 body.mobile .vie{left:max(14px,env(safe-area-inset-left,0px));bottom:auto;top:calc(max(12px,env(safe-area-inset-top,0px)) + 160px);width:112px}
 body.mobile .aide,body.mobile .vhs .petit{display:none}
@@ -326,7 +343,8 @@ body.mobile .disque .v-touche,body.mobile .juke-stop .v-touche{display:none}
 @media (max-height:600px){.juke-actions{position:sticky;bottom:0;background:linear-gradient(rgba(255,238,247,0),#ffeef7 35%);padding-bottom:6px}}
 
 /* ---------- front de mer : tickets, petits jeux, mode photo ---------- */
-.tickets{position:absolute;top:max(16px,env(safe-area-inset-top,0px));right:calc(max(20px,env(safe-area-inset-right,0px)) + 176px);text-align:right}
+.tickets{position:absolute;top:max(16px,env(safe-area-inset-top,0px));right:calc(max(20px,env(safe-area-inset-right,0px)) + 176px);text-align:right;padding-right:24px;border-right:1px solid rgba(255,245,250,.22)}
+.tickets .ico{color:var(--peche)}
 .tickets span{display:block;font-size:19px;letter-spacing:.3em;color:var(--peche)}
 .tickets b{display:block;font-weight:400;font-size:60px;line-height:.9;font-variant-numeric:tabular-nums;transform-origin:right center}
 .tickets.pulse b{animation:ticketpulse .5s ease-out}
@@ -347,7 +365,7 @@ body.photo .hud{opacity:0}
 .cadre i:nth-child(3){left:4vw;bottom:6vh;border-right:0;border-top:0}
 .cadre i:nth-child(4){right:4vw;bottom:6vh;border-left:0;border-top:0}
 .cadre span{position:absolute;left:50%;bottom:7.5vh;transform:translateX(-50%);font-size:21px;letter-spacing:.12em;color:#fff5fa;text-shadow:0 0 8px rgba(255,159,205,.7);white-space:nowrap}
-body.mobile .tickets{right:calc(max(20px,env(safe-area-inset-right,0px)) + 104px)}
+body.mobile .tickets{right:calc(max(20px,env(safe-area-inset-right,0px)) + 104px);padding-right:12px}
 body.mobile .tickets b{font-size:36px}
 body.mobile .tickets span{font-size:15px}
 body.mobile .mini{top:calc(max(10px,env(safe-area-inset-top,0px)) + 40px);left:calc(max(14px,env(safe-area-inset-left,0px)) + 128px);transform:none;padding:2px 12px 3px;text-align:left}

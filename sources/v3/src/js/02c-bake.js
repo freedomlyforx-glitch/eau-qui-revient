@@ -66,6 +66,44 @@ function bakeRaw(name, body, size) {
 /* ---------- les matières ---------- */
 T.noise = bakeRaw('bruit', 'vec4 tx(vec2 uv){ return vec4(fbm(uv, vec2(4.0), 6), fbm(uv + 0.5, vec2(8.0), 5), 1.0 - vor(uv * 6.0, vec2(6.0)).x, fbm(uv + 0.2, vec2(32.0), 4)); }', 256);
 
+// nuages : R = masses bourgeonnantes, G = détail qui ronge les bords, B = grandes zones de ciel clair ou couvert, A = voiles d'altitude
+T.cloud = bakeRaw('nuages', `
+float wf(vec2 uv, float per){ return 1.0 - vor(uv * per, vec2(per)).x; }
+vec4 tx(vec2 uv){
+  float p = fbm(uv, vec2(4.0), 6);
+  float w = wf(uv, 6.0) * 0.55 + wf(uv + 0.31, 12.0) * 0.3 + wf(uv + 0.67, 24.0) * 0.15;
+  float base = sat(p * 0.74 + w * 0.44 - 0.14);
+  float det = wf(uv + 0.13, 20.0) * 0.6 + wf(uv + 0.57, 40.0) * 0.4;
+  float big = fbm(uv + 0.77, vec2(2.0), 4);
+  float cir = fbm(vec2(uv.x + 0.25 * fbm(uv + 0.4, vec2(3.0), 3), uv.y), vec2(3.0, 14.0), 5);
+  return vec4(base, det, big, cir); }`, 512);
+// la lune : mers sombres, hauts plateaux clairs, cratères et leurs rayons
+T.moon = bakeRaw('lune', `
+float crat(vec2 uv, float per, float keep, float r){ vec3 v = vor(uv * per, vec2(per)); float on = step(keep, v.z), rr = r * (0.55 + 0.6 * fract(v.z * 7.3)); return on * (smoothstep(rr * 1.35, rr, v.x) * 0.5 - smoothstep(rr * 0.92, rr * 0.35, v.x) * 0.62); }
+vec4 tx(vec2 uv){
+  vec2 p = uv * 2.0 - 1.0;
+  float n1 = fbm(uv + 0.21, vec2(3.0), 6), n2 = fbm(uv + 0.37, vec2(7.0), 5), n3 = fbm(uv + 0.11, vec2(28.0), 4);
+  float sea = smoothstep(0.47, 0.6, n1 * 0.78 + n2 * 0.22 + 0.11 * (p.y * 0.55 - p.x * 0.5) + 0.03);
+  float alb = mix(0.95, 0.5, sea) * (0.88 + 0.24 * n3) * (0.9 + 0.2 * n2);
+  alb += crat(uv, 7.0, 0.5, 0.16) * 0.2 + crat(uv + 0.43, 15.0, 0.45, 0.2) * 0.16 + crat(uv + 0.71, 34.0, 0.4, 0.22) * 0.1;
+  // un grand cratère à rayons, en bas, et un autre plus petit dans une mer
+  vec2 t1 = p - vec2(-0.12, -0.62); float d1 = length(t1), a1 = atan(t1.y, t1.x);
+  float ray = pow(fbm(vec2(a1 / 6.2832 + 0.5, 0.3), vec2(14.0, 1.0), 3), 3.0) * 1.5 * smoothstep(0.85, 0.08, d1) * smoothstep(0.03, 0.09, d1);
+  alb += ray * 0.3 + smoothstep(0.085, 0.03, d1) * 0.35 - smoothstep(0.035, 0.012, d1) * 0.25;
+  vec2 t2 = p - vec2(-0.36, 0.14); float d2 = length(t2);
+  alb += smoothstep(0.26, 0.03, d2) * 0.1 + smoothstep(0.06, 0.02, d2) * 0.3;
+  alb = clamp(alb, 0.16, 1.0);
+  vec3 col = mix(vec3(0.84, 0.88, 1.0), vec3(1.0, 0.97, 0.93), smoothstep(0.5, 0.95, alb)) * alb;
+  return vec4(col, 1.0); }`, 512);
+T.moon.wrapS = T.moon.wrapT = THREE.ClampToEdgeWrapping;
+
+// toile des manches : armure sergé, un fil dessus, un fil dessous
+T.fabric = bakeTex('toile', `vec4 tx(vec2 uv){
+  vec2 p = uv * 40.0; float wx = abs(sin(p.x * 3.14159)), wy = abs(sin(p.y * 3.14159));
+  float over = step(0.5, fract((floor(p.x) + floor(p.y)) * 0.5));
+  float h = mix(wx * (0.55 + 0.45 * wy), wy * (0.55 + 0.45 * wx), over) * 0.8 + fbm(uv, vec2(64.0), 3) * 0.2;
+  return vec4(vec3(0.93 + 0.07 * h) * (0.93 + 0.14 * fbm(uv + 0.3, vec2(6.0), 4)), h); }`, { size: 256, amp: 0.007, rough: [1.0, 0.88, 0.0, 1.0], repeat: [1, 3] });
+
 T.asphalt = bakeTex('bitume', `vec4 tx(vec2 uv){
   float n = fbm(uv, vec2(8.0), 5); vec3 v1 = vor(uv * 96.0, vec2(96.0)), v2 = vor(uv * 220.0, vec2(220.0));
   vec3 col = mix(${G('#665e7e')}, ${G('#8a819f')}, n) * (0.8 + 0.4 * v1.z);
