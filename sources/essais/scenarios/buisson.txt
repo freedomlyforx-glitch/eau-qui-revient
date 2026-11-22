@@ -1,0 +1,12 @@
+const S = d.SHOOT || []; const ims = S.filter((o) => o.isInstancedMesh && o.userData.surface === 'buisson'); if (!ims.length) return 'pas de buissons dans la liste (' + S.length + ')';
+const rc = new THREE.Raycaster(); let ok = 0, n = 0; const m = new THREE.Matrix4(), p = new THREE.Vector3();
+for (const im of ims) for (let i = 0; i < im.count; i += 7) { im.getMatrixAt(i, m); p.setFromMatrixPosition(m); rc.set(new THREE.Vector3(p.x, p.y + 6, p.z), new THREE.Vector3(0, -1, 0)); const h = rc.intersectObjects(S, false); n++; if (h.length && h[0].object.userData.surface === 'buisson' && h[0].distance < 6) ok++; }
+const rocks = S.filter((o) => o.isInstancedMesh && o.userData.surface === 'dur'); let rk = 0, rn = 0;
+for (const im of rocks) for (let i = 0; i < im.count; i += 9) { im.getMatrixAt(i, m); p.setFromMatrixPosition(m); rc.set(new THREE.Vector3(p.x, p.y + 8, p.z), new THREE.Vector3(0, -1, 0)); const h = rc.intersectObjects([im], false); rn++; if (h.length) rk++; }
+return 'buissons : ' + ims.length + ' lots, tirs touchés ' + ok + '/' + n + ' | rochers : ' + rocks.length + ' lots, touchés ' + rk + '/' + rn + ' | fleurs : ' + d.FLOWER_CELLS.map((c) => c.ims[0].count + '/' + c.n).join(' ');
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(2, 0.03, -80); P.yaw = 0; P.vel.set(0,0,0); d.step(3, 0.03);
+---
+wait 3000
+---
+return 'depuis le bout de la jetée, fleurs : ' + d.FLOWER_CELLS.map((c) => c.ims[0].count + '/' + c.n).join(' ') + ' | groupes proches visibles : ' + d.NEAR.map((n) => n.g.visible ? 1 : 0).join('');

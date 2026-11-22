@@ -18,7 +18,9 @@ async def setup(p, w=1280, h=720, mobile=False):
 async def route(r):
     u = r.request.url
     if u.startswith('https://cdn.jsdelivr.net/npm/three@0.147.0/'):
-        await r.fulfill(path=LIB + u.split('three@0.147.0/')[1].split('?')[0], content_type='application/javascript')
+        rel = u.split('three@0.147.0/')[1].split('?')[0]
+        if os.environ.get('CLAIR') and rel == 'build/three.min.js': rel = 'build/three.js'
+        await r.fulfill(path=LIB + rel, content_type='application/javascript')
     elif u.startswith('https://fonts.googleapis.com/css2'):
         await r.fulfill(body=CSS, content_type='text/css')
     elif u.startswith('http://jeu.test/f/'):

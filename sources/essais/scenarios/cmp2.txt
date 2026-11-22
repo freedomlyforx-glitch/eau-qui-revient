@@ -1,0 +1,25 @@
+d.REV.mode = 'jamais';
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(32, d.TH(32, 44), 44); P.yaw = 3.14; P.pitch = 0.05; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 6500
+---
+shot ombre_maison
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(3, 0.03, -18); P.yaw = 0.35; P.pitch = -0.25; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 6500
+---
+shot ombre_jetee
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(40, 0, 10); P.yaw = 1.2; P.pitch = -0.12; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 6500
+---
+shot ombre_prom
+---
+const P = d.P; d.setTimeOfDay(430); P.pos.set(0, 0.03, -42); P.yaw = 0.9; P.pitch = 0.0; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 6500
+---
+shot nuit_stands

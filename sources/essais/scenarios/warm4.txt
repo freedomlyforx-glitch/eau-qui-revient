@@ -1,0 +1,26 @@
+const r = d.renderer, n0 = r.info.programs.length, w0 = d.WARM.done; const t0 = performance.now(); if (!d.WARM.done) d.warmUp(); const dt = performance.now() - t0;
+let sans = 0, tot = 0; const seen = new Set(), ex = [];
+d.scene.traverse((o) => { const m = o.material; if (!m || Array.isArray(m) || seen.has(m)) return; seen.add(m); tot++; if (!r.properties.get(m).currentProgram) { sans++; if (ex.length < 10) ex.push(o.type + ':' + m.type + ':' + (o.name || o.userData.surface || '')); } });
+window.__p0 = new Set(r.info.programs.map((p) => p.id));
+return 'déjà faite : ' + w0 + ' | programmes avant ' + n0 + ', après ' + r.info.programs.length + ' (' + Math.round(dt) + ' ms) | matières ' + tot + ' dont sans programme ' + sans + '\n' + ex.join('\n');
+---
+wait 1500
+---
+d.REV.mode = 'jamais'; const P = d.P; d.setTimeOfDay(430); P.pos.set(2, 0.03, -30); P.yaw = 0.1; P.vel.set(0,0,0); d.step(3, 0.03);
+---
+wait 2500
+---
+const P = d.P; P.yaw = 3.2; d.step(2, 0.03);
+---
+wait 2500
+---
+const n1 = d.renderer.info.programs.length; const P = d.P; d.setTimeOfDay(215); P.pos.set(100, d.TH(100, 50), 50); P.yaw = -1.75; P.vel.set(0,0,0); d.step(3, 0.03); return 'après la jetée de nuit : ' + n1;
+---
+wait 2500
+---
+const n1 = d.renderer.info.programs.length; const P = d.P; P.pos.set(-133, d.TH(-133, 6), 6); P.yaw = 0; P.vel.set(0,0,0); d.step(3, 0.03); return 'après le lagon : ' + n1;
+---
+wait 2500
+---
+const nw = d.renderer.info.programs.filter((p) => !window.__p0.has(p.id)); const mats = []; d.scene.traverse((o) => { if (o.material && !Array.isArray(o.material)) { const pr = d.renderer.properties.get(o.material).currentProgram; if (pr && !window.__p0.has(pr.id)) mats.push(pr.id + ':' + o.type + (o.isInstancedMesh ? 'x' : '') + ':' + o.material.type + (o.material.transparent ? ':transp' : '') + ':side' + o.material.side + ':' + (o.name || o.userData.surface || '') + ':L' + o.layers.mask); } });
+return 'après la villa : ' + d.renderer.info.programs.length + ' | nouveaux : ' + nw.map((p) => p.id + ' ' + p.name).join(' , ') + '\n' + [...new Set(mats)].join('\n');

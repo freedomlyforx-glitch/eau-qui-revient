@@ -130,35 +130,38 @@ function drawRadar() {
 const hudEls = { viseur: $('viseur'), impact: $('impact'), fleche: $('fleche'), chevron: $('chevron'), dist: $('dist'), boss: $('boss'), bossBarre: $('bossBarre'), temps: $('vhsTemps') };
 try { $('vhsDate').textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase(); } catch (e) {}
 let lastSec = -1, radarT = 0;
-const _head = new V3();
+const _head = new V3(), _head2 = new V3();
+// l'affichage n'est retouché que lorsqu'une valeur change vraiment : chaque écriture oblige le navigateur à recalculer la page
+const _hudLast = new WeakMap();
+function hudSet(el, prop, v) { let o = _hudLast.get(el); if (!o) _hudLast.set(el, o = {}); if (o[prop] === v) return; o[prop] = v; if (prop === 'text') el.textContent = v; else if (prop.charCodeAt(0) === 45) el.style.setProperty(prop, v); else el.style[prop] = v; }
 function updateHUD(dt) {
   const spread = 10 + WPN.heat * 16 + Math.min(1, Math.hypot(P.vel.x, P.vel.z) / 5) * 12 + (P.onGround ? 0 : 14);
-  hudEls.viseur.style.setProperty('--ecart', spread.toFixed(1) + 'px');
-  hudEls.viseur.style.opacity = String(Math.max(0, 1 - WPN.ads * 1.6));
+  hudSet(hudEls.viseur, '--ecart', spread.toFixed(1) + 'px');
+  hudSet(hudEls.viseur, 'opacity', Math.max(0, 1 - WPN.ads * 1.6).toFixed(2));
   hitmarkT -= dt;
-  hudEls.impact.style.opacity = hitmarkT > 0 ? String(Math.min(1, hitmarkT * 8)) : '0';
-  hudEls.impact.style.setProperty('--c', hitmarkKill ? '#ff8fc8' : '#fff5fa');
-  hudEls.impact.style.transform = hitmarkKill ? 'scale(1.6)' : 'scale(1)';
+  hudSet(hudEls.impact, 'opacity', hitmarkT > 0 ? Math.min(1, hitmarkT * 8).toFixed(2) : '0');
+  hudSet(hudEls.impact, '--c', hitmarkKill ? '#ff8fc8' : '#fff5fa');
+  hudSet(hudEls.impact, 'transform', hitmarkKill ? 'scale(1.6)' : 'scale(1)');
   const sec = Math.floor(playTime);
   if (sec !== lastSec) { lastSec = sec; const h = Math.floor(sec / 3600), mm = Math.floor(sec / 60) % 60, s = sec % 60; hudEls.temps.textContent = [h, mm, s].map((v) => String(v).padStart(2, '0')).join(':'); }
-  hudEls.bossBarre.style.transform = 'scaleX(' + (M.state === 'dead' ? 0 : M.state === 'form' ? M.form : Math.max(0, M.hp) / 100).toFixed(3) + ')';
-  hudEls.boss.style.opacity = M.state === 'dead' ? '0' : '1';
+  hudSet(hudEls.bossBarre, 'transform', 'scaleX(' + (M.state === 'dead' ? 0 : M.state === 'form' ? M.form : Math.max(0, M.hp) / 100).toFixed(3) + ')');
+  hudSet(hudEls.boss, 'opacity', M.state === 'dead' ? '0' : '1');
   if (M.state !== 'dead') {
     _head.set(M.pos.x, M.gy + 2.2, M.pos.z);
     const d = _head.distanceTo(camera.position);
-    const v = _head.clone().project(camera);
+    const v = _head2.copy(_head).project(camera);
     const behind = v.z > 1;
     let x = v.x, y = v.y; if (behind) { x = -x; y = -y; }
     const off = behind || Math.abs(x) > 0.92 || Math.abs(y) > 0.86;
     if (off) {
       const ang = Math.atan2(y, x), W = innerWidth, H = innerHeight;
       const ex = W / 2 + Math.cos(ang) * (W / 2 - 60), ey = H / 2 - Math.sin(ang) * (H / 2 - 70);
-      hudEls.fleche.style.transform = 'translate(' + ex.toFixed(0) + 'px,' + ey.toFixed(0) + 'px)';
-      hudEls.chevron.style.transform = 'rotate(' + (-ang).toFixed(3) + 'rad)';
-      hudEls.dist.textContent = Math.round(d) + ' m';
-      hudEls.fleche.style.opacity = '1';
-    } else hudEls.fleche.style.opacity = '0';
-  } else hudEls.fleche.style.opacity = '0';
+      hudSet(hudEls.fleche, 'transform', 'translate(' + ex.toFixed(0) + 'px,' + ey.toFixed(0) + 'px)');
+      hudSet(hudEls.chevron, 'transform', 'rotate(' + (-ang).toFixed(2) + 'rad)');
+      hudSet(hudEls.dist, 'text', Math.round(d) + ' m');
+      hudSet(hudEls.fleche, 'opacity', '1');
+    } else hudSet(hudEls.fleche, 'opacity', '0');
+  } else hudSet(hudEls.fleche, 'opacity', '0');
   radarT -= dt; if (radarT <= 0) { radarT = 1 / 15; drawRadar(); }
   updatePhrase(dt);
   updateHint();
@@ -256,6 +259,7 @@ function syncOptions() {
   $('sensi').value = sens; $('valSensi').textContent = sens.toFixed(2);
   $('coupeMusique').checked = VOL.coupeMusique; $('coupeArmes').checked = VOL.coupeArmes;
   $('qualite').value = qualiteNom; $('revenant').value = REV.mode; $('styleImage').value = imageStyle;
+  $('voirIps').checked = IPS.on; $('ips').hidden = !IPS.on;
 }
 for (const [id, key] of [['volMusique', 'musique'], ['volArmes', 'armes'], ['volEffets', 'effets']]) $(id).addEventListener('input', (e) => { VOL[key] = parseFloat(e.target.value); saveVolumes(); syncOptions(); });
 $('coupeMusique').addEventListener('change', (e) => { VOL.coupeMusique = e.target.checked; saveVolumes(); });
@@ -264,3 +268,6 @@ $('sensi').addEventListener('input', (e) => { sens = parseFloat(e.target.value) 
 $('qualite').addEventListener('change', (e) => applyQuality(e.target.value));
 $('styleImage').addEventListener('change', (e) => applyStyle(e.target.value));
 $('revenant').addEventListener('change', (e) => { REV.mode = e.target.value; store('revenant', REV.mode); });
+// compteur de fluidité : à activer dans les réglages pour savoir combien d'images par seconde l'appareil affiche vraiment
+$('voirIps').addEventListener('change', (e) => { IPS.on = e.target.checked; store('ips', IPS.on ? '1' : '0'); $('ips').hidden = !IPS.on; $('ips').textContent = ''; });
+$('voirIps').checked = IPS.on; $('ips').hidden = !IPS.on;

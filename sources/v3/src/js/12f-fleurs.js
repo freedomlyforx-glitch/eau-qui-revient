@@ -32,18 +32,29 @@
       heads.push([M4(x, TH(x, z) + h, z, 0, rr(0, 6), 0, s, s * 0.55, s), R() < 0.6 ? c0 : c1]);
     }
   }
-  const stemIM = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.008, 0.01, 1, 4, 1, true), std({ color: C('#5aae7a'), roughness: 0.8 }), stems.length);
-  stems.forEach((m, i) => stemIM.setMatrixAt(i, m));
-  const headIM = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), std({ color: C('#ffffff'), roughness: 0.6, emissive: C('#ffffff'), emissiveIntensity: 0.08 }), heads.length);
-  heads.forEach(([m, c], i) => { headIM.setMatrixAt(i, m); headIM.setColorAt(i, C(c)); });
-  for (const im of [stemIM, headIM]) { im.receiveShadow = true; im.frustumCulled = false; world.add(im); }
+  // fleurs et touffes rangées par bandes de terrain : chaque bande n'est dessinée que si elle est dans le champ,
+  // et dans un ordre mélangé, pour qu'un massif lointain s'éclaircisse peu à peu au lieu de disparaître d'un coup
+  const FCELL = 70, mix = (a, b) => (((a * 2654435761) >>> 0) % 9973) - (((b * 2654435761) >>> 0) % 9973) || a - b;
+  const bands = (n, at) => { const map = new Map(); for (let i = 0; i < n; i++) { const e = at(i).elements, x = e[12], z = e[14], k = Math.floor((x - MAP.x0) / FCELL); let c = map.get(k); if (!c) map.set(k, c = { idx: [], x0: 1e9, x1: -1e9, z0: 1e9, z1: -1e9 }); c.idx.push(i); c.x0 = Math.min(c.x0, x); c.x1 = Math.max(c.x1, x); c.z0 = Math.min(c.z0, z); c.z1 = Math.max(c.z1, z); } for (const c of map.values()) c.idx.sort(mix); return [...map.values()]; };
+  const stemGeo = new THREE.CylinderGeometry(0.008, 0.01, 1, 4, 1, true), stemMat = std({ color: C('#5aae7a'), roughness: 0.8 });
+  const headGeo = new THREE.IcosahedronGeometry(1, 0), headMat = std({ color: C('#ffffff'), roughness: 0.6, emissive: C('#ffffff'), emissiveIntensity: 0.08 });
+  for (const c of bands(heads.length, (i) => heads[i][0])) {
+    const stemIM = new THREE.InstancedMesh(stemGeo, stemMat, c.idx.length), headIM = new THREE.InstancedMesh(headGeo, headMat, c.idx.length);
+    c.idx.forEach((i, k) => { stemIM.setMatrixAt(k, stems[i]); headIM.setMatrixAt(k, heads[i][0]); headIM.setColorAt(k, C(heads[i][1])); });
+    for (const im of [stemIM, headIM]) { im.receiveShadow = true; world.add(im); STATIC_IM.push([im, 0.5]); }
+    FLOWER_CELLS.push({ ims: [stemIM, headIM], n: c.idx.length, x0: c.x0, x1: c.x1, z0: c.z0, z1: c.z1 });
+  }
   // touffes d'herbe haute
   const tuft = mergeList([0, 2.1, 4.2].map((a) => [new THREE.ConeGeometry(0.035, 0.5, 4), M4(Math.sin(a) * 0.05, 0.25, Math.cos(a) * 0.05, Math.cos(a) * 0.25, 0, Math.sin(a) * 0.25)]));
   const tufts = []; tries = 0;
   while (tufts.length < NT && tries < 4000) { tries++; const x = rr(MAP.x0, MAP.x1), z = rr(MAP.z0, MAP.z1); if (!free(x, z)) continue; const s = rr(0.6, 1.3); tufts.push([M4(x, TH(x, z), z, 0, rr(0, 6), 0, s, s * rr(0.8, 1.3), s), R()]); }
-  const tuftIM = new THREE.InstancedMesh(tuft, std({ color: C('#ffffff'), roughness: 0.9 }), tufts.length);
-  tufts.forEach(([m, r], i) => { tuftIM.setMatrixAt(i, m); tuftIM.setColorAt(i, C(r < 0.5 ? '#6fbf8a' : r < 0.85 ? '#8fd39a' : '#b9e2a0')); });
-  tuftIM.receiveShadow = true; tuftIM.frustumCulled = false; world.add(tuftIM);
+  const tuftMat = std({ color: C('#ffffff'), roughness: 0.9 });
+  for (const c of bands(tufts.length, (i) => tufts[i][0])) {
+    const tuftIM = new THREE.InstancedMesh(tuft, tuftMat, c.idx.length);
+    c.idx.forEach((i, k) => { const r = tufts[i][1]; tuftIM.setMatrixAt(k, tufts[i][0]); tuftIM.setColorAt(k, C(r < 0.5 ? '#6fbf8a' : r < 0.85 ? '#8fd39a' : '#b9e2a0')); });
+    tuftIM.receiveShadow = true; world.add(tuftIM); STATIC_IM.push([tuftIM, 0.5]);
+    FLOWER_CELLS.push({ ims: [tuftIM], n: c.idx.length, x0: c.x0, x1: c.x1, z0: c.z0, z1: c.z1 });
+  }
 }
 /* arroseurs : un jet d'eau qui balaie la pelouse devant quelques maisons */
 const SPRINKLERS = [];

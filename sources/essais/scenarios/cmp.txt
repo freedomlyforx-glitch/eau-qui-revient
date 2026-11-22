@@ -1,0 +1,61 @@
+d.REV.mode = 'jamais';
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(-6, 0, 8); P.yaw = -2.0; P.pitch = 0.02; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot prom_jour
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(-45, d.TH(-45, 20), 20); P.yaw = 2.6; P.pitch = -0.12; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot fleurs_jour
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(20, d.TH(20, 40), 40); P.yaw = -1.9; P.pitch = -0.1; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot pelouse_jour
+---
+const P = d.P; d.setTimeOfDay(430); P.pos.set(2, 0.03, -30); P.yaw = 0.1; P.pitch = 0.02; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot jetee_nuit
+---
+const P = d.P; d.setTimeOfDay(430); P.pos.set(-20, 0, 6); P.yaw = -1.6; P.pitch = 0.03; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot prom_nuit
+---
+const P = d.P; d.setTimeOfDay(430); P.pos.set(2, 0.03, -60); P.yaw = 1.5; P.pitch = 0.1; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot phare_nuit
+---
+const P = d.P; d.setTimeOfDay(430); P.pos.set(-30, d.TH(-30, -20), -20); P.yaw = -0.4; P.pitch = 0.05; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot plage_nuit
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(100, d.TH(100, 50), 50); P.yaw = -1.75; P.pitch = -0.08; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot lagon_jour
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(32, d.TH(32, 49.6), 49.6); P.yaw = 3.14; P.pitch = -0.05; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot jukebox_jour
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(-20, 0, 22); P.yaw = 3.6; P.pitch = 0.05; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 2600
+---
+shot ville_jour

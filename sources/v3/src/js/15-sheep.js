@@ -19,7 +19,11 @@ SHEEP.forEach((s, i) => { for (let k = 0; k < PUFFS; k++) imPuff.setColorAt(i * 
 imPuff.instanceColor.needsUpdate = true;
 function pickTarget(s) { const z = SHEEP_ZONES[s.zi]; s.tx = rr(z.x0, z.x1); s.tz = rr(z.z0, z.z1); }
 const _sm = new THREE.Matrix4(), _sb = new THREE.Matrix4(), _sh = new THREE.Matrix4(), _sv = new V3(), _sq = new THREE.Quaternion();
+const SHEEP_IMS = [imPuff, imHead, imEar, imLeg, imEye, imPupil];
 function sheepMatrices() {
+  // trop loin pour être vus : on ne calcule ni ne dessine rien
+  { let near = false; const cx = camera.position.x, cz = camera.position.z; for (let i = 0; i < NS; i++) { const dx = SHEEP[i].x - cx, dz = SHEEP[i].z - cz; if (dx * dx + dz * dz < 175 * 175) { near = true; break; } }
+    for (const im of SHEEP_IMS) im.visible = near; if (!near) return; }
   for (let i = 0; i < NS; i++) {
     const s = SHEEP[i];
     const sc = s.dead ? 0 : s.scale * 1.3;
@@ -46,7 +50,7 @@ function sheepMatrices() {
       _sm.compose(_sv.set(sg * 0.085 + s.px * er * 0.45, 0.07 + s.py * er * 0.45, 0.2 + er * 0.62), _q.identity(), _ss.set(pr, pr, pr * 0.5)); imPupil.setMatrixAt(i * 2 + k, _sm.premultiply(_sh));
     }
   }
-  for (const im of [imPuff, imHead, imEar, imLeg, imEye, imPupil]) im.instanceMatrix.needsUpdate = true;
+  for (const im of SHEEP_IMS) im.instanceMatrix.needsUpdate = true;
 }
 function updateSheep(dt, authority, players) {
   for (let i = 0; i < NS; i++) {

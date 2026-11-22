@@ -80,8 +80,9 @@ const G_CANS = { id: 'boites', nom: 'CHAMBOULE-TOUT', unit: 'boîtes', aide: 'fa
   const s = FRONT.stands.canards;
   const mk = (body, beak) => { const gs = [vc(new THREE.SphereGeometry(1, 12, 9), M4(0, 0, 0, 0, 0, 0, 0.15, 0.13, 0.2), body), vc(new THREE.SphereGeometry(0.095, 10, 8), M4(0, 0.17, 0.11), body), vc(new THREE.ConeGeometry(0.04, 0.1, 8).rotateX(PI / 2), M4(0, 0.16, 0.24), beak), vc(new THREE.ConeGeometry(0.06, 0.12, 6).rotateX(-PI / 2 - 0.5), M4(0, 0.06, -0.2), body), vc(new THREE.SphereGeometry(0.018, 6, 5), M4(0.07, 0.2, 0.17), '#2e1f4a'), vc(new THREE.SphereGeometry(0.018, 6, 5), M4(-0.07, 0.2, 0.17), '#2e1f4a')]; const g = mergeGeos(gs); gs.forEach((q) => q.dispose()); return g; };
   const g1 = mk('#ffe06a', '#ff9a4a'), g2 = mk('#ff8fcf', '#ffe06a');
+  const duckGrp = nearGroup(s.xb, s.z, 62);
   [{ x: s.xb + 0.75, y: DECK + 1.82, dir: 1, sp: 1.15 }, { x: s.xb + 1.5, y: DECK + 1.4, dir: -1, sp: 1.7 }].forEach((r, ri) => {
-    for (let i = 0; i < 5; i++) { const gold = i === 2, m = new THREE.Mesh(gold ? g2 : g1, VCMAT); m.position.set(r.x, r.y, s.z); m.rotation.y = r.dir > 0 ? 0 : PI; m.castShadow = true; world.add(m); DUCKS.push({ duck: true, m, dir: r.dir, sp: r.sp, u: i * DSPAN / 5, down: 0, gold, y: r.y }); }
+    for (let i = 0; i < 5; i++) { const gold = i === 2, m = new THREE.Mesh(gold ? g2 : g1, VCMAT); m.position.set(r.x, r.y, s.z); m.rotation.y = r.dir > 0 ? 0 : PI; m.castShadow = true; duckGrp.add(m); DUCKS.push({ duck: true, m, dir: r.dir, sp: r.sp, u: i * DSPAN / 5, down: 0, gold, y: r.y }); }
     B.add(boxG(0.05, 0.3, 4.95), colorMat(ri ? '#7fd8e6' : '#a9c8f4'), M4(r.x + 0.2, r.y - 0.27, s.z)); B.add(boxG(0.06, 0.06, 4.95), MAT.white, M4(r.x + 0.2, r.y - 0.1, s.z));
     B.add(boxG(0.3, r.y - DECK - 0.35, 4.95), colorMat('#fff7ef'), M4(r.x + 0.05, DECK + (r.y - DECK - 0.35) / 2, s.z));
   });
@@ -89,9 +90,10 @@ const G_CANS = { id: 'boites', nom: 'CHAMBOULE-TOUT', unit: 'boîtes', aide: 'fa
   // boîtes de conserve
   const c = FRONT.stands.boites, YS = DECK + 1.32, CG = cylG(0.085, 0.085, 0.2, 12), cols = ['#ff8fcf', '#7ff0ff', '#ffe06a'];
   B.add(boxG(0.5, 0.07, 4.7), MAT.white, M4(c.xb + 0.8, YS - 0.035, c.z), true, true); B.add(boxG(0.4, YS - DECK - 0.07, 4.5), colorMat('#ffc6a0'), M4(c.xb + 0.8, DECK + (YS - DECK - 0.07) / 2, c.z), true, true);
+  const canGrp = nearGroup(c.xb, c.z, 48);
   for (const p of [-1.15, 1.15]) for (let row = 0; row < 3; row++) for (let j = 0; j < 3 - row; j++) {
     const m = new THREE.Mesh(CG, colorMat(cols[(row + j) % 3], { roughness: 0.3, metalness: 0.55 })); m.castShadow = true;
-    const home = new V3(c.xb + 0.8, YS + 0.1 + row * 0.2, c.z + p + (j - (2 - row) / 2) * 0.19); m.position.copy(home); world.add(m);
+    const home = new V3(c.xb + 0.8, YS + 0.1 + row * 0.2, c.z + p + (j - (2 - row) / 2) * 0.19); m.position.copy(home); canGrp.add(m);
     CANS.push({ m, home, p, row, j, st: 0, v: new V3(), w: new V3() });
   }
   CAN.x0 = c.xb + 0.25; CAN.z0 = c.z - 2.4; CAN.z1 = c.z + 2.4;
@@ -248,12 +250,15 @@ const PIANO = { keys: [], last: -1, hist: [], done: false, x0: 26.2, z0: 8.1, no
   const cols = ['#ff8fcf', '#7ff0ff', '#ffd27a', '#a3f3dc'];
   base(-30, 8, 4.8, 4.8);
   [[-1.15, -1.15], [1.15, -1.15], [-1.15, 1.15], [1.15, 1.15]].forEach(([dx, dz], i) => SIMON.tiles.push(pad(flatG(2.0, 2.0), -30 + dx, 8 + dz, cols[i])));
+  { const g = nearGroup(-30, 8, 80); SIMON.tiles.forEach((m) => g.add(m)); }
   totem(-30, 11.6, 'PISTE SIMON', '#ff8fcf'); ACT.list.push(SIMON);
   base(70, 8, 6.6, 6.6);
   for (let i = 0; i < 9; i++) FLAQ.pads.push(pad(new THREE.CircleGeometry(0.82, 24).rotateX(-PI / 2), 70 + (i % 3 - 1) * 2.1, 8 + (Math.floor(i / 3) - 1) * 2.1, '#7ff0ff'));
+  { const g = nearGroup(70, 8, 80); FLAQ.pads.forEach((m) => g.add(m)); }
   totem(70, 12.4, 'TAPE-FLAQUE', '#7ff0ff'); ACT.list.push(FLAQ);
   base(30, 9.5, 8.0, 3.2);
   for (let i = 0; i < 8; i++) { const m = pad(flatG(0.88, 2.8), PIANO.x0 + 0.475 + i * 0.95, 9.5, PASTELS[i]); m.userData.c = C('#fff5fa'); m.userData.tint = C(PASTELS[i]); PIANO.keys.push(m); }
+  { const g = nearGroup(30, 9.5, 80); PIANO.keys.forEach((m) => g.add(m)); }
   totem(30, 12.2, 'PIANO GÉANT', '#ffd27a');
   fleche(-18.5, 12.7, 'VILLA-REFUGE'); fleche(-63, 9.8, 'VILLA-REFUGE');
 })();

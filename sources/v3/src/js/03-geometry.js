@@ -78,6 +78,69 @@ function mergeGeos(list) {
   out.computeBoundingSphere(); out.computeBoundingBox();
   return out;
 }
+/* Une matière transparente « à deux faces » est dessinée en deux passes par le moteur, qui recherche en plus son programme à chaque fois.
+   En doublant la géométrie (chaque triangle existe aussi retourné), la matière reste à une face : une seule passe. */
+function twoSidedIndex(geo) {      // pour les matières sans éclairage : mêmes sommets, triangles retournés ajoutés à l'index
+  const g = geo; if (!g.index) { const n = g.attributes.position.count, ix = []; for (let i = 0; i < n; i++) ix.push(i); g.setIndex(ix); }
+  const a = Array.from(g.index.array), b = []; for (let i = 0; i < a.length; i += 3) b.push(a[i], a[i + 2], a[i + 1]);
+  g.setIndex(a.concat(b)); return g;
+}
+function twoSided(geo) {           // pour les matières éclairées : sommets dédoublés, normales inversées au dos
+  const g = geo.index ? geo.toNonIndexed() : geo.clone(), out = new THREE.BufferGeometry();
+  for (const name in g.attributes) {
+    const at = g.attributes[name], n = at.count, sz = at.itemSize, src = at.array, dst = new src.constructor(n * 2 * sz); dst.set(src, 0);
+    for (let t = 0; t < n; t += 3) for (let k = 0; k < 3; k++) { const so = (t + (k === 1 ? 2 : k === 2 ? 1 : 0)) * sz, d = (n + t + k) * sz; for (let c = 0; c < sz; c++) dst[d + c] = (name === 'normal' ? -1 : 1) * src[so + c]; }
+    out.setAttribute(name, new THREE.BufferAttribute(dst, sz, at.normalized));
+  }
+  return out;
+}
+/* Ombres du décor fixe : pour dessiner une ombre, seule la forme compte, pas la matière. Au lieu d'un dessin par matière et par case
+   de terrain, toutes les formes d'une même case sont réunies en une seule, qui ne sert qu'à la passe d'ombre (couche 3, invisible ailleurs). */
+function mergeShadowCasters(meshes) {
+  const groups = new Map();
+  for (const m of meshes) {
+    const mat = m.material, g = m.geometry;
+    if (!m.castShadow || m.customDepthMaterial || Array.isArray(mat) || mat.alphaTest > 0 || mat.transparent || !mat.visible || !g.attributes.position) continue;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const c = g.boundingSphere.center, sk = mat.shadowSide !== null ? 's' + mat.shadowSide : 'm' + mat.side;
+    const key = (g.boundingSphere.radius > CELL ? 'big' : Math.floor((c.x + 200) / CELL) + '_' + Math.floor((c.z + 200) / CELL)) + '|' + sk;
+    if (!groups.has(key)) groups.set(key, { mat, list: [] });
+    groups.get(key).list.push(m);
+  }
+  const mats = {};
+  for (const { mat, list } of groups.values()) {
+    if (list.length < 2) continue;
+    let n = 0; for (const m of list) n += m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count;
+    const pos = new Float32Array(n * 3); let o = 0;
+    for (const m of list) {
+      const p = m.geometry.attributes.position, ix = m.geometry.index, cnt = ix ? ix.count : p.count;
+      for (let i = 0; i < cnt; i++) { const k = ix ? ix.getX(i) : i; pos[o++] = p.getX(k); pos[o++] = p.getY(k); pos[o++] = p.getZ(k); }
+      m.castShadow = false;
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeBoundingSphere();
+    const sk = mat.side + '_' + mat.shadowSide, sm = new THREE.Mesh(g, mats[sk] || (mats[sk] = new THREE.MeshBasicMaterial({ side: mat.side, shadowSide: mat.shadowSide })));
+    sm.castShadow = true; sm.layers.set(3); sm.matrixAutoUpdate = false; sm.userData.noLampShadow = true; list[0].parent.add(sm);
+  }
+}
+/* Lots d'objets identiques posés une fois pour toutes (panneaux, fleurs, buissons…) : on calcule la sphère qui les contient tous.
+   Le moteur n'envoie alors plus le lot à la carte graphique quand il est entièrement hors du champ, ou hors de la zone d'ombre. */
+const STATIC_IM = [];
+const _fm = new THREE.Matrix4(), _fp = new V3(), _fq = new THREE.Quaternion(), _fs = new V3();
+function fitInstanced(im, pad, sphere) {
+  const g = im.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
+  let sph = sphere;
+  if (!sph) {
+    const r0 = g.boundingSphere.radius + g.boundingSphere.center.length(), box = new THREE.Box3(); let n = 0, rmax = 0;
+    for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, _fm); _fm.decompose(_fp, _fq, _fs); const sc = Math.max(Math.abs(_fs.x), Math.abs(_fs.y), Math.abs(_fs.z)); if (sc < 1e-6) continue; box.expandByPoint(_fp); rmax = Math.max(rmax, sc * r0); n++; }
+    if (!n) return;
+    sph = new THREE.Sphere(); box.getBoundingSphere(sph); sph.radius += rmax + (pad || 0);
+  }
+  // une géométrie jumelle (mêmes tampons) porte la grande sphère ; les lancers de rayon gardent l'originale
+  const g2 = new THREE.BufferGeometry(); g2.index = g.index; for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.groups = g.groups; g2.boundingSphere = sph; g2.boundsTree = g.boundsTree;
+  const ray0 = im.raycast;
+  im.raycast = function (rc, out) { const cur = this.geometry; this.geometry = g; try { ray0.call(this, rc, out); } finally { this.geometry = cur; } };
+  im.geometry = g2; im.frustumCulled = true;
+}
 function prepGeo(geo, m4) {
   let g = geo.index ? geo.toNonIndexed() : geo.clone();
   if (!g.attributes.normal) g.computeVertexNormals();

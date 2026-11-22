@@ -125,7 +125,7 @@ stand('guichet', -62, 1, 'GUICHET DES RECORDS', '#ffe68f', '#a9e3cb', '#ffd27a')
   B.add(cylG(1.15, 1.15, 0.5, 14), colorMat('#2e1f4a'), M4(x, y + 16.4, z));
   B.add(new THREE.ConeGeometry(1.6, 1.5, 16), colorMat('#ff8fb8'), M4(x, y + 19.75, z), true, true);
   B.add(new THREE.SphereGeometry(0.2, 10, 8), MAT.gold, M4(x, y + 20.6, z));
-  const glass = new THREE.Mesh(cylG(1.15, 1.15, 2.3, 14, true), kitGlass); glass.position.set(x, y + 17.85, z); world.add(glass);
+  const glass = new THREE.Mesh(twoSided(cylG(1.15, 1.15, 2.3, 14, true)), kitGlass); glass.position.set(x, y + 17.85, z); world.add(glass);
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 10), new THREE.MeshBasicMaterial({ color: HDR('#fff1c0', 2) })); core.position.set(x, y + 17.8, z); world.add(core); FRONT.lantern = core;
   addCircle(x, z, 2.5, y, y + 16); addFloorCircle(x, z, 2.2, y + 16.2);
   const bm = new THREE.MeshBasicMaterial({ color: C('#fff1c0'), vertexColors: true, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });

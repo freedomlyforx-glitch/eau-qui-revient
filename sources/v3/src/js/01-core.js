@@ -28,6 +28,24 @@ if (!window.THREE || !THREE.EffectComposer || !THREE.MarchingCubes) {
 }
 THREE.ColorManagement.legacyMode = false;
 
+/* ---------- fluidité : le moteur recalculait la place de chaque objet à chaque passe, même immobile ----------
+   On garde en mémoire la dernière position, rotation et taille : tant qu'elles n'ont pas changé, rien n'est recalculé. */
+{
+  const O = THREE.Object3D.prototype, add0 = O.add;
+  O.updateMatrix = function () {
+    const p = this.position, q = this.quaternion, s = this.scale; let c = this._mc;
+    if (c === undefined) { c = this._mc = new Float64Array(10); c[0] = NaN; }
+    else if (c[0] === p.x && c[1] === p.y && c[2] === p.z && c[3] === q.x && c[4] === q.y && c[5] === q.z && c[6] === q.w && c[7] === s.x && c[8] === s.y && c[9] === s.z) return;
+    c[0] = p.x; c[1] = p.y; c[2] = p.z; c[3] = q.x; c[4] = q.y; c[5] = q.z; c[6] = q.w; c[7] = s.x; c[8] = s.y; c[9] = s.z;
+    this.matrix.compose(p, q, s); this.matrixWorldNeedsUpdate = true;
+  };
+  // un objet rattaché ailleurs change de place dans le monde sans avoir bougé chez lui
+  O.add = function (o) { const r = add0.apply(this, arguments); for (let i = 0; i < arguments.length; i++) { const a = arguments[i]; if (a && a.isObject3D) a.matrixWorldNeedsUpdate = true; } return r; };
+}
+let FRAME = 0;
+// compteur de fluidité : à activer dans les réglages pour savoir combien d'images par seconde l'appareil affiche vraiment
+const IPS = { on: false, n: 0, t: 0 };
+
 /* ---------- brume : elle se teinte vers le soleil et s'allège en altitude ---------- */
 const FOGU = { sun: { value: new THREE.Vector3(0, 1, 0) }, col: { value: new THREE.Color(0, 0, 0) } };
 THREE.ShaderChunk.fog_pars_fragment = [
@@ -57,6 +75,8 @@ const PRESETS = {
   basse: { pr: 1.0, shadow: 1024, shW: 96, trans: false, mc: 22, balls: 700, debris: 200, soft: 4, confetti: 260, shadows: false, shadowEvery: 2, tex: 256, ao: 0, refl: 0, rays: 0, grass: 0, fxaa: 0, vol: 0, lampSh: 0 }
 };
 const QUAL_ORDER = ['basse', 'moyenne', 'haute', 'ultra'];
+// sur téléphone, la carte des ombres du réglage moyen est un peu plus petite : presque moitié moins de points à remplir, pour un bord d'ombre à peine plus doux
+if (IS_TOUCH) PRESETS.moyenne.shadow = 1536;
 let qualiteNom = store('qualite') || (IS_TOUCH ? 'moyenne' : 'haute');
 if (!PRESETS[qualiteNom]) qualiteNom = 'haute';
 const Q = Object.assign({}, PRESETS[qualiteNom]);
@@ -70,6 +90,8 @@ try {
   noteEl.textContent = "Ce navigateur n'arrive pas à afficher la 3D (WebGL). Essaie avec Chrome, Edge, Safari ou Firefox à jour.";
   throw e;
 }
+renderer.debug.checkShaderErrors = DEBUG;      // en jeu, on n'attend pas la carte graphique à chaque nouvelle matière pour vérifier qu'elle est correcte
+IPS.on = store('ips') === '1';
 const isWebGL2 = renderer.capabilities.isWebGL2;
 const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 // sur téléphone on démarre un cran plus bas : la définition remonte toute seule si l'appareil suit
@@ -77,7 +99,26 @@ let pixelRatio = Math.min(window.devicePixelRatio || 1, Q.pr, IS_TOUCH ? 1.25 : 
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+/* Ombres du réglage "moyenne" (celui des téléphones) : un filtre à 9 lectures par point d'image au lieu de 16.
+   Le bord de l'ombre reste doux, à peine moins large, et chaque point d'image éclairé coûte nettement moins cher. */
+let PCF9 = false;
+{
+  const ch = THREE.ShaderChunk, a = '#if defined( SHADOWMAP_TYPE_PCF )', b = '#elif defined( SHADOWMAP_TYPE_PCF_SOFT )', s = ch.shadowmap_pars_fragment, i = s.indexOf(a), j = s.indexOf(b);
+  if (i > 0 && j > i) {
+    ch.shadowmap_pars_fragment = s.slice(0, i) + a + '\n' + [
+      'vec2 texelSize = vec2( 1.0 ) / shadowMapSize;',
+      'vec2 st9 = shadowCoord.xy * shadowMapSize; vec2 f9 = fract( st9 ); vec2 uv9 = ( floor( st9 ) + 0.5 ) * texelSize;',
+      'float dx9 = texelSize.x, dy9 = texelSize.y, z9 = shadowCoord.z;',
+      'float r0 = ( 1.0 - f9.x ) * texture2DCompare( shadowMap, uv9 + vec2( - dx9, - dy9 ), z9 ) + texture2DCompare( shadowMap, uv9 + vec2( 0.0, - dy9 ), z9 ) + f9.x * texture2DCompare( shadowMap, uv9 + vec2( dx9, - dy9 ), z9 );',
+      'float r1 = ( 1.0 - f9.x ) * texture2DCompare( shadowMap, uv9 + vec2( - dx9, 0.0 ), z9 ) + texture2DCompare( shadowMap, uv9, z9 ) + f9.x * texture2DCompare( shadowMap, uv9 + vec2( dx9, 0.0 ), z9 );',
+      'float r2 = ( 1.0 - f9.x ) * texture2DCompare( shadowMap, uv9 + vec2( - dx9, dy9 ), z9 ) + texture2DCompare( shadowMap, uv9 + vec2( 0.0, dy9 ), z9 ) + f9.x * texture2DCompare( shadowMap, uv9 + vec2( dx9, dy9 ), z9 );',
+      'shadow = ( ( 1.0 - f9.y ) * r0 + r1 + f9.y * r2 ) * 0.25;'
+    ].join('\n') + '\n' + s.slice(j);
+    PCF9 = true;
+  }
+}
+const shadowType = (name) => PCF9 && name === 'moyenne' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = shadowType(qualiteNom);
 renderer.shadowMap.autoUpdate = false;
 renderer.outputEncoding = THREE.LinearEncoding;
 renderer.toneMapping = THREE.NoToneMapping;
@@ -97,8 +138,9 @@ const clockU = { value: 0 };
 
 /* ---------- lumières douces (éclairage local bon marché, sans ombre) ---------- */
 const SOFT_N = Q.soft, SOFT_GAIN = 0.62;
-const SOFT = { pos: { value: [] }, col: { value: [] } };
-for (let i = 0; i < SOFT_N; i++) { SOFT.pos.value.push(new THREE.Vector4(0, -999, 0, 0.01)); SOFT.col.value.push(new THREE.Color(0, 0, 0)); }
+// valeurs rangées à plat : elles partent telles quelles vers la carte graphique, sans recopie
+const SOFT = { pos: { value: new Float32Array(SOFT_N * 4) }, col: { value: new Float32Array(SOFT_N * 3) } };
+for (let i = 0; i < SOFT_N; i++) { SOFT.pos.value[i * 4 + 1] = -999; SOFT.pos.value[i * 4 + 3] = 0.01; }
 const softLights = [];
 function addSoft(x, y, z, color, intensity, radius, opts) {
   const l = { p: new V3(x, y + (typeof YOFF === 'number' ? YOFF : 0), z), c: C(color), k: intensity, r: radius, on: true, flick: (opts && opts.flick) || 0, ph: Math.random() * 10, base: intensity };
@@ -106,20 +148,26 @@ function addSoft(x, y, z, color, intensity, radius, opts) {
 }
 const _softTmp = [];
 function updateSoftLights(cam) {
-  _softTmp.length = 0;
-  for (const l of softLights) { if (!l.on || l.k <= 0) continue; const d = l.p.distanceTo(cam) - l.r * 1.2; _softTmp.push([d, l]); }
-  _softTmp.sort((a, b) => a[0] - b[0]);
-  for (const l of softLights) l.slot = -1;
+  // les plus proches d'abord, par insertion dans une petite liste (aucune allocation)
+  let n = 0;
+  for (let j = 0; j < softLights.length; j++) {
+    const l = softLights[j]; l.slot = -1; if (!l.on || l.k <= 0) continue;
+    const d = l.p.distanceTo(cam) - l.r * 1.2; if (n === SOFT_N && d >= _softTmp[n - 1]._d) continue;
+    l._d = d; let i = n < SOFT_N ? n++ : n - 1;
+    while (i > 0 && _softTmp[i - 1]._d > d) { _softTmp[i] = _softTmp[i - 1]; i--; }
+    _softTmp[i] = l;
+  }
+  const sp = SOFT.pos.value, sc = SOFT.col.value;
   for (let i = 0; i < SOFT_N; i++) {
-    const e = _softTmp[i];
-    if (e) {
-      const l = e[1]; let k = l.k; l.slot = i;
+    if (i < n) {
+      const l = _softTmp[i]; let k = l.k; l.slot = i;
       if (l.flick) k *= 1 - l.flick * (0.5 + 0.5 * Math.sin(clockU.value * 13 + l.ph) * Math.sin(clockU.value * 7.3 + l.ph * 2));
       // fondu doux pour les lumières qui entrent ou sortent de la sélection
       const fade = i >= SOFT_N - 2 ? 0.5 : 1;
-      SOFT.pos.value[i].set(l.p.x, l.p.y, l.p.z, l.r);
-      SOFT.col.value[i].copy(l.c).multiplyScalar(k * fade * SOFT_GAIN);
-    } else { SOFT.pos.value[i].set(0, -999, 0, 0.01); SOFT.col.value[i].setRGB(0, 0, 0); }
+      const g = k * fade * SOFT_GAIN;
+      sp[i * 4] = l.p.x; sp[i * 4 + 1] = l.p.y; sp[i * 4 + 2] = l.p.z; sp[i * 4 + 3] = l.r;
+      sc[i * 3] = l.c.r * g; sc[i * 3 + 1] = l.c.g * g; sc[i * 3 + 2] = l.c.b * g;
+    } else { sp[i * 4] = 0; sp[i * 4 + 1] = -999; sp[i * 4 + 2] = 0; sp[i * 4 + 3] = 0.01; sc[i * 3] = 0; sc[i * 3 + 1] = 0; sc[i * 3 + 2] = 0; }
   }
 }
 const SOFT_VERT_PARS = 'varying vec3 vSoftW;';
@@ -152,7 +200,13 @@ const SOFT_FRAG = [
   '}'
 ].join('\n');
 function softPatch(shader, extra) {
-  shader.uniforms.uSoftPos = SOFT.pos; shader.uniforms.uSoftCol = SOFT.col; shader.uniforms.uFogSun = FOGU.sun; shader.uniforms.uFogSunCol = FOGU.col;
+  // les lumières douces sont les mêmes pour toutes les matières : on ne les renvoie qu'au changement de programme, comme les autres lumières
+  const lit = shader.uniforms.ambientLightColor;
+  if (lit) {
+    shader.uniforms.uSoftPos = { get value() { return SOFT.pos.value; }, get needsUpdate() { return lit.needsUpdate !== false; } };
+    shader.uniforms.uSoftCol = { get value() { return SOFT.col.value; }, get needsUpdate() { return lit.needsUpdate !== false; } };
+  } else { shader.uniforms.uSoftPos = SOFT.pos; shader.uniforms.uSoftCol = SOFT.col; }
+  shader.uniforms.uFogSun = FOGU.sun; shader.uniforms.uFogSunCol = FOGU.col;
   shader.uniforms.uWetK = WETU; if (LSH_ON) { shader.uniforms.uLsT = LSHU.tex; shader.uniforms.uLsM = LSHU.mat; shader.uniforms.uLsP = LSHU.par; }
   shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\n' + SOFT_VERT_PARS).replace('#include <project_vertex>', '#include <project_vertex>\n' + SOFT_VERT);
   // la carte de relief porte aussi la brillance dans son canal alpha (matières de l'atelier)

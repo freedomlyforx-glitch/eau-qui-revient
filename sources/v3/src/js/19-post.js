@@ -3,14 +3,17 @@
    tourbillon des portes et de l'ordinateur
    ========================================================= */
 class LayerPass extends THREE.Pass {
-  constructor(sc, cam, mask, clear, near) { super(); this.scene = sc; this.camera = cam; this.mask = mask; this.clearAll = clear; this.near = near; this.needsSwap = false; }
+  constructor(sc, cam, mask, clear, near, skip) { super(); this.scene = sc; this.camera = cam; this.mask = mask; this.clearAll = clear; this.near = near; this.skip = skip || null; this.needsSwap = false; }
   render(r, writeBuffer, readBuffer) {
     const old = r.autoClear; r.autoClear = false;
     this.camera.layers.mask = this.mask;
     if (this.camera.near !== this.near) { this.camera.near = this.near; this.camera.updateProjectionMatrix(); }
     r.setRenderTarget(this.renderToScreen ? null : readBuffer);
     if (this.clearAll) r.clear(true, true, false); else r.clearDepth();
+    // passe de l'arme : le décor entier est mis de côté le temps du dessin, le moteur n'a plus à le parcourir
+    const sk = this.skip; if (sk) sk.visible = false;
     r.render(this.scene, this.camera);
+    if (sk) sk.visible = true;
     r.autoClear = old;
   }
 }
@@ -69,16 +72,17 @@ class FxPass extends THREE.Pass {
 // image finale : tons, anticrénelage, netteté, puis les effets d'écran (gouttes, sous l'eau, tourbillon)
 // uRetro = 1 redonne le rendu "cassette" d'origine (franges colorées, grain, lignes)
 const FinalShader = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uWet: { value: 0 }, uFlash: { value: 0 }, uKill: { value: 0 }, uHurt: { value: 0 }, uExposure: { value: 1.05 }, uRes: { value: new THREE.Vector2(1, 1) }, uUnder: { value: 0 }, uWarp: { value: 0 }, uPix: { value: 0 }, uFade: { value: 0 }, uFxaa: { value: 1 }, uSharp: { value: 0.35 }, uRetro: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uWet: { value: 0 }, uFlash: { value: 0 }, uKill: { value: 0 }, uHurt: { value: 0 }, uExposure: { value: 1.05 }, uRes: { value: new THREE.Vector2(1, 1) }, uUnder: { value: 0 }, uWarp: { value: 0 }, uPix: { value: 0 }, uFade: { value: 0 }, uFxaa: { value: 1 }, uSharp: { value: 0.35 }, uRetro: { value: 0 }, tBloom: { value: null } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
   fragmentShader: [
-    'uniform sampler2D tDiffuse; uniform float uTime, uWet, uFlash, uKill, uHurt, uExposure, uUnder, uWarp, uPix, uFade, uFxaa, uSharp, uRetro; uniform vec2 uRes; varying vec2 vUv;',
+    'uniform sampler2D tDiffuse, tBloom; uniform float uTime, uWet, uFlash, uKill, uHurt, uExposure, uUnder, uWarp, uPix, uFade, uFxaa, uSharp, uRetro; uniform vec2 uRes; varying vec2 vUv;',
     'float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }',
     'vec3 safe(vec3 c){ return vec3(c.r >= 0.0 && c.r < 6e4 ? c.r : 0.0, c.g >= 0.0 && c.g < 6e4 ? c.g : 0.0, c.b >= 0.0 && c.b < 6e4 ? c.b : 0.0); }',
     'vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }',
     // courbe filmique qui garde mieux les teintes vives dans les hautes lumières
     'vec3 tm(vec3 c){ c = safe(c) * uExposure; vec3 a = aces(c); float L = dot(c, vec3(0.2126, 0.7152, 0.0722)); vec3 b = c * (aces(vec3(L)).x / max(L, 1e-4)); return clamp(mix(a, b, 0.55), 0.0, 1.0); }',
-    'vec3 T(vec2 uv){ return tm(texture2D(tDiffuse, uv).rgb); }',
+    'vec3 bl;',
+    'vec3 T(vec2 uv){ return tm(texture2D(tDiffuse, uv).rgb + bl); }',
     'float lu(vec3 c){ return dot(sqrt(c), vec3(0.299, 0.587, 0.114)); }',
     'vec3 toSRGB(vec3 c){ c = max(c, vec3(0.0)); vec3 lo = c*12.92; vec3 hi = 1.055*pow(c, vec3(1.0/2.4)) - 0.055; return mix(lo, hi, step(vec3(0.0031308), c)); }',
     'vec3 drops(vec2 uv, float t, float amt){',
@@ -96,6 +100,7 @@ const FinalShader = {
     '  if (uPix > 0.001) { float px = mix(1.0, 90.0, uPix); vec2 g = uRes/px; uv = (floor(uv*g)+0.5)/g; }',
     '  if (uUnder > 0.001) { uv += vec2(sin(uv.y*24.0 + uTime*2.2), cos(uv.x*20.0 + uTime*1.8))*0.0035*uUnder; }',
     '  if (uWet > 0.001) { dr = drops(uv, uTime, uWet*0.42); uv -= dr.xy*1.6; }',
+    '  bl = texture2D(tBloom, uv).rgb;',
     '  vec2 dir = uv - 0.5, px = 1.0 / uRes;',
     '  vec3 col = T(uv);',
     '  if (uFxaa > 0.5) {',
@@ -147,15 +152,51 @@ function buildComposer() {
   if (DEPTH_OK) composer.renderTarget2.depthTexture = new THREE.DepthTexture(w, h);
   composer.addPass(new LayerPass(scene, camera, 1, true, 0.15));
   fxPass = new FxPass(); fxPass.enabled = false; composer.addPass(fxPass);
-  composer.addPass(new LayerPass(scene, camera, 2, false, 0.02));
+  composer.addPass(new LayerPass(scene, camera, 2, false, 0.02, world));
   bloom = new THREE.UnrealBloomPass(new THREE.Vector2(Math.round(w / 2), Math.round(h / 2)), 0.5, 0.55, 0.97);
   const bs = bloom.setSize.bind(bloom); bloom.setSize = (bw, bh) => bs(Math.max(1, Math.round(bw / 2)), Math.max(1, Math.round(bh / 2)));
+  // le halo n'est plus recollé sur l'image par une passe plein écran : la dernière passe le lit directement
+  bloom.render = function (r, writeBuffer, readBuffer) {
+    r.getClearColor(this._oldClearColor); this.oldClearAlpha = r.getClearAlpha();
+    const oldAuto = r.autoClear; r.autoClear = false; r.setClearColor(this.clearColor, 0);
+    this.highPassUniforms.tDiffuse.value = readBuffer.texture; this.highPassUniforms.luminosityThreshold.value = this.threshold;
+    this.fsQuad.material = this.materialHighPassFilter; r.setRenderTarget(this.renderTargetBright); r.clear(); this.fsQuad.render(r);
+    let input = this.renderTargetBright;
+    for (let i = 0; i < this.nMips; i++) {
+      const m = this.separableBlurMaterials[i]; this.fsQuad.material = m;
+      m.uniforms.colorTexture.value = input.texture; m.uniforms.direction.value = THREE.UnrealBloomPass.BlurDirectionX;
+      r.setRenderTarget(this.renderTargetsHorizontal[i]); r.clear(); this.fsQuad.render(r);
+      m.uniforms.colorTexture.value = this.renderTargetsHorizontal[i].texture; m.uniforms.direction.value = THREE.UnrealBloomPass.BlurDirectionY;
+      r.setRenderTarget(this.renderTargetsVertical[i]); r.clear(); this.fsQuad.render(r);
+      input = this.renderTargetsVertical[i];
+    }
+    this.fsQuad.material = this.compositeMaterial;
+    this.compositeMaterial.uniforms.bloomStrength.value = this.strength; this.compositeMaterial.uniforms.bloomRadius.value = this.radius; this.compositeMaterial.uniforms.bloomTintColors.value = this.bloomTintColors;
+    r.setRenderTarget(this.renderTargetsHorizontal[0]); r.clear(); this.fsQuad.render(r);
+    finalPass.uniforms.tBloom.value = this.renderTargetsHorizontal[0].texture;
+    r.setClearColor(this._oldClearColor, this.oldClearAlpha); r.autoClear = oldAuto;
+  };
   composer.addPass(bloom);
   finalPass = new THREE.ShaderPass(FinalShader);
   composer.addPass(finalPass);
   finalPass.uniforms.uRes.value.set(w, h); fxPass.setSize(w, h);
 }
 buildComposer();
+/* ordre de dessin des objets opaques : d'abord ceux qui partagent le même programme de la carte graphique, puis la même matière.
+   Chaque changement de programme oblige à renvoyer toutes les lumières : moins il y en a, moins le téléphone travaille. */
+{
+  let epoch = 1; const props = renderer.properties;
+  const pid = (m) => { if (m._pe !== epoch) { const p = props.get(m).currentProgram; m._pid = p ? p.id : 0; m._pe = epoch; } return m._pid; };
+  renderer.setOpaqueSort((a, b) => {
+    if (a.groupOrder !== b.groupOrder) return a.groupOrder - b.groupOrder;
+    if (a.renderOrder !== b.renderOrder) return a.renderOrder - b.renderOrder;
+    const ma = a.material, mb = b.material;
+    if (ma !== mb) { const pa = pid(ma), pb = pid(mb); if (pa !== pb) return pa - pb; if (ma.id !== mb.id) return ma.id - mb.id; }
+    if (a.z !== b.z) return a.z - b.z;
+    return a.id - b.id;
+  });
+  setInterval(() => { epoch++; }, 2000);
+}
 // style d'image : "net" (par défaut) ou "cassette" (le rendu d'origine, franges et grain)
 let imageStyle = store('style') === 'cassette' ? 'cassette' : 'net';
 function applyStyle(name) { imageStyle = name === 'cassette' ? 'cassette' : 'net'; store('style', imageStyle); finalPass.uniforms.uRetro.value = imageStyle === 'cassette' ? 1 : 0; }
@@ -195,6 +236,7 @@ function applyQuality(name, auto) {
   pixelRatio = Math.min(window.devicePixelRatio || 1, p.pr, IS_TOUCH ? Math.max(1, pixelRatio) : 9); resize();
   sun.castShadow = p.shadows; if (sun.shadow.map && sun.shadow.mapSize.x !== p.shadow) { sun.shadow.map.dispose(); sun.shadow.map = null; } sun.shadow.mapSize.set(p.shadow, p.shadow);
   setShadowArea(p.shW);
+  { const st = shadowType(name); if (renderer.shadowMap.type !== st) { renderer.shadowMap.type = st; scene.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) m.needsUpdate = true; }); } }
   setMonsterQuality(p.trans);
   if (typeof setGrass === 'function') setGrass(p.grass);
   setVolClouds(p.vol);

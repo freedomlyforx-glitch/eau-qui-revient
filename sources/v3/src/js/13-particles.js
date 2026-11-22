@@ -153,6 +153,10 @@ const BU = []; for (let i = 0; i < NBU; i++) { BU.push({ p: new V3(), life: 0, s
 let bubI = 0;
 function spawnBubble(x, y, z, s, top) { const b = BU[bubI]; bubI = (bubI + 1) % NBU; b.p.set(x, y, z); b.life = 4; b.s = s; b.top = top; }
 
+// un lot de particules sans rien de vivant n'est ni renvoyé à la carte graphique ni dessiné
+function poolLive(mesh, any) { if (any || mesh.visible) mesh.instanceMatrix.needsUpdate = true; mesh.visible = any; }
+function anyFlag(a) { for (let i = 0; i < a.length; i++) if (a[i]) return true; return false; }
+function anyLife(a) { for (let i = 0; i < a.length; i++) if (a[i].life > 0) return true; return false; }
 function updateParticles(dt) {
   for (let i = FLASHES.length - 1; i >= 0; i--) { const l = FLASHES[i]; l.flashT -= dt; l.k = Math.max(0, l.flashT * 16); if (l.flashT <= 0) { l.on = false; FLASHES.splice(i, 1); const j = softLights.indexOf(l); if (j >= 0) softLights.splice(j, 1); } }
   for (let i = 0; i < DROPS; i++) {
@@ -178,7 +182,7 @@ function updateParticles(dt) {
     _sc.set(s, s * Math.min(3.2, 1 + sp * 0.12), s);
     _m4.compose(_v2.set(D.p[k], D.p[k + 1], D.p[k + 2]), _q2, _sc); dropMesh.setMatrixAt(i, _m4);
   }
-  dropMesh.instanceMatrix.needsUpdate = true;
+  poolLive(dropMesh, anyFlag(D.alive));
   for (let i = 0; i < SPARKS; i++) {
     if (!S.alive[i]) continue;
     const k = i * 3; S.life[i] -= dt;
@@ -192,7 +196,7 @@ function updateParticles(dt) {
     _sc.set(s, s, s * Math.min(2.5, 0.4 + sp * 0.15));
     _m4.compose(_v2.set(S.p[k], S.p[k + 1], S.p[k + 2]), _q2, _sc); sparkMesh.setMatrixAt(i, _m4);
   }
-  sparkMesh.instanceMatrix.needsUpdate = true;
+  poolLive(sparkMesh, anyFlag(S.alive));
   for (const o of puffs) { if (!o.s.visible) continue; o.life -= dt; if (o.life <= 0) { o.s.visible = false; continue; } const t = 1 - o.life / o.max; o.s.position.addScaledVector(o.v, dt); o.s.scale.setScalar(o.size * (1 + t * 1.6)); o.s.material.opacity = (1 - t) * (1 - t) * 0.85; }
   for (const o of rings) { if (!o.m.visible) continue; o.life -= dt; if (o.life <= 0) { o.m.visible = false; continue; } const t = 1 - o.life / o.max; const r = lerp(o.r0, o.r1, easeOut(t)); o.m.scale.set(r * 2, 1, r * 2); o.m.material.opacity = (1 - t) * 0.9; }
   for (const o of puddles) { if (!o.m.visible) continue; o.life -= dt; if (o.life <= 0) { o.m.visible = false; continue; } const t = 1 - o.life / o.max; o.m.material.opacity = Math.min(1, (1 - t) * 3) * 0.5; }
@@ -207,7 +211,7 @@ function updateParticles(dt) {
     const sc = Math.min(1, s.life * 2) * s.s;
     _m4.compose(s.p, s.q, _sc.set(sc, sc, sc)); shellMesh.setMatrixAt(i, _m4);
   }
-  shellMesh.instanceMatrix.needsUpdate = true;
+  poolLive(shellMesh, anyLife(SH));
   for (const tr of tracers) {
     if (!tr.m.visible) continue;
     tr.t += dt * tr.sp;
@@ -232,6 +236,7 @@ function updateParticles(dt) {
     _m4.compose(d.p, d.q, d.s); debMesh.setMatrixAt(i, _m4); dbAny = true;
   }
   if (dbAny || debDirty) { debMesh.instanceMatrix.needsUpdate = true; debDirty = false; }
+  { let on = false; for (let i = 0; i < NDEB; i++) if (DB[i].on) { on = true; break; } debMesh.visible = on; }
   for (let i = 0; i < NSH; i++) {
     const d = SD[i]; if (d.life <= 0) continue;
     d.life -= dt;
@@ -243,7 +248,7 @@ function updateParticles(dt) {
     const s = d.s * Math.min(1, d.life * 2);
     _m4.compose(d.p, d.q, _sc.set(s, s, s)); shardMesh.setMatrixAt(i, _m4);
   }
-  shardMesh.instanceMatrix.needsUpdate = true;
+  poolLive(shardMesh, anyLife(SD));
   for (let i = 0; i < NCF; i++) {
     const d = CF[i]; if (d.life <= 0) continue;
     d.life -= dt;
@@ -259,12 +264,12 @@ function updateParticles(dt) {
     const s = Math.min(1, d.life * 1.5);
     _m4.compose(d.p, d.q, _sc.set(s, s, s)); confMesh.setMatrixAt(i, _m4);
   }
-  confMesh.instanceMatrix.needsUpdate = true;
+  poolLive(confMesh, anyLife(CF));
   for (let i = 0; i < NBU; i++) {
     const b = BU[i]; if (b.life <= 0) continue;
     b.life -= dt; b.p.y += dt * (0.6 + b.s * 10); b.p.x += Math.sin(clockU.value * 7 + i) * dt * 0.1;
     if (b.p.y > b.top || b.life <= 0) { b.life = 0; bubMesh.setMatrixAt(i, ZERO); continue; }
     _m4.compose(b.p, _q2.identity(), _sc.set(b.s, b.s, b.s)); bubMesh.setMatrixAt(i, _m4);
   }
-  bubMesh.instanceMatrix.needsUpdate = true;
+  poolLive(bubMesh, anyLife(BU));
 }

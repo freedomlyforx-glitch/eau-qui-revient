@@ -27,7 +27,7 @@ const PSUB = { // sous-boîtes locales pour les tirs : [x0,x1,y0,y1,partie]
 const wallMat = std({ color: C('#ffffff'), map: T.siding, roughness: 0.9 });
 const trimIMMat = std({ color: C('#f7edf4'), roughness: 0.6 });
 const gdoorMat = std({ color: C('#efe2ee'), map: T.garage, roughness: 0.55 });
-const glassMat = std({ color: C('#d9f3ff'), map: T.glass, transparent: true, roughness: 0.05, metalness: 0.15, envMapIntensity: 1.6, side: THREE.DoubleSide, depthWrite: false });
+const glassMat = std({ color: C('#d9f3ff'), map: T.glass, transparent: true, roughness: 0.05, metalness: 0.15, envMapIntensity: 1.6, depthWrite: false });
 const panels = [], houses = [], glasses = [], shopGlass = [];
 const ZERO4 = new THREE.Matrix4().makeScale(0, 0, 0);
 // premier passage : on compte, second passage : on remplit les maillages instanciés
@@ -63,11 +63,12 @@ for (const t of ['mur', 'fenetre', 'porte', 'garage']) {
 IM.trimF = new THREE.InstancedMesh(PGEO.fenetre.trim, trimIMMat, Math.max(1, counts.fenetre)); IM.trimF.count = 0;
 IM.trimP = new THREE.InstancedMesh(PGEO.porte.trim, trimIMMat, Math.max(1, counts.porte)); IM.trimP.count = 0;
 IM.gdoor = new THREE.InstancedMesh(PGEO.garage.door, gdoorMat, Math.max(1, counts.garage)); IM.gdoor.count = 0;
-IM.glass = new THREE.InstancedMesh(new THREE.PlaneGeometry(WIN.x * 2, WIN.y1 - WIN.y0), glassMat, counts.fenetre + 40); IM.glass.count = 0;
+IM.glass = new THREE.InstancedMesh(twoSided(new THREE.PlaneGeometry(WIN.x * 2, WIN.y1 - WIN.y0)), glassMat, counts.fenetre + 40); IM.glass.count = 0;
 for (const k of ['trimF', 'trimP', 'gdoor']) { IM[k].castShadow = true; IM[k].receiveShadow = true; IM[k].frustumCulled = false; world.add(IM[k]); }
 IM.glass.frustumCulled = false; IM.glass.renderOrder = 3; world.add(IM.glass);
 const _m = new THREE.Matrix4(), _sc3 = new V3();
 
+for (const k in IM) STATIC_IM.push([IM[k], 9]);
 function makeHouse(L, spec, hi) {
   const h = { id: hi, L, x: L.x, z: L.z, rot: L.rot, gs: L.gs, ox: spec.ox, gx: spec.gx, panels: [], dead: 0, collapsed: false, tCol: 0, anim: null, roofY: 0 };
   const cr = Math.cos(L.rot), sr = Math.sin(L.rot);

@@ -1,0 +1,19 @@
+d.REV.mode = 'jamais';
+---
+const P = d.P; d.setTimeOfDay(430); P.pos.set(2, 0.03, -30); P.yaw = 0.1; P.pitch = 0.02; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 9000
+---
+shot h_jetee_nuit
+---
+const P = d.P; d.setTimeOfDay(430); P.pos.set(-20, 0, 6); P.yaw = -1.6; P.pitch = 0.03; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 9000
+---
+shot h_prom_nuit
+---
+const P = d.P; d.setTimeOfDay(215); P.pos.set(-6, 0, 8); P.yaw = -2.0; P.pitch = 0.02; P.vel.set(0, 0, 0); d.step(3, 0.03);
+---
+wait 9000
+---
+shot h_prom_jour

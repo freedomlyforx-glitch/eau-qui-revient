@@ -2,6 +2,19 @@
    Décor fixe : sol, rues, palissade, palmiers, réverbères, ciel
    ========================================================= */
 const world = new THREE.Group(); scene.add(world);
+/* fluidité : les petits objets des stands sont rangés par groupes qu'on ne dessine que si on est assez près pour les voir,
+   et les massifs de fleurs s'éclaircissent avec la distance (au-delà d'une centaine de mètres, une fleur ne fait plus un point d'image) */
+const NEAR = [], FLOWER_CELLS = [];
+function nearGroup(x, z, d) { const g = new THREE.Group(); g.matrixAutoUpdate = false; world.add(g); NEAR.push({ g, x, z, d2: d * d }); return g; }
+function updateNear() {
+  const cx = camera.position.x, cz = camera.position.z;
+  for (let i = 0; i < NEAR.length; i++) { const n = NEAR[i], dx = cx - n.x, dz = cz - n.z; n.g.visible = dx * dx + dz * dz < n.d2; }
+  for (let i = 0; i < FLOWER_CELLS.length; i++) {
+    const c = FLOWER_CELLS[i], dx = Math.max(c.x0 - cx, 0, cx - c.x1), dz = Math.max(c.z0 - cz, 0, cz - c.z1), d = Math.hypot(dx, dz);
+    const n = Math.ceil(c.n * clamp((100 - d) / 45, 0, 1));
+    for (let k = 0; k < c.ims.length; k++) { c.ims[k].count = n; c.ims[k].visible = n > 0; }
+  }
+}
 const SHOOT = [];            // maillages touchables par les balles (lancer de rayon three)
 const B = new Batch('bati');
 const BF = new Batch('palmes');
@@ -153,12 +166,17 @@ PALMS_DEF.forEach(([x, z], i) => palm(x, z, rr(11, 16), rr(0.4, 1.4), rr(0, Math
 /* ---------- réverbères (lumière douce au sol, sans halo plaqué) ---------- */
 const coneMat = new THREE.ShaderMaterial({
   uniforms: { uColor: { value: HDR('#ffd2c6', 1.0) } },
-  vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vN = normalize(normalMatrix*normal); vec4 mv = modelViewMatrix*vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
+  vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vec4 p = vec4(position, 1.0); vec3 n = normal;\n#ifdef USE_INSTANCING\n p = instanceMatrix * p; n = n / vec3(instanceMatrix[0].x, instanceMatrix[1].y, instanceMatrix[2].z);\n#endif\n vN = normalize(normalMatrix*n); vec4 mv = modelViewMatrix*p; vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }',
   fragmentShader: 'uniform vec3 uColor; varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ float vy = clamp(vUv.y, 0.0, 1.0); float edge = clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0); float a = vy*vy*0.2*smoothstep(0.0,0.6,edge)*smoothstep(0.08,0.4,vy); gl_FragColor = vec4(uColor*a, 1.0); }',
-  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
 });
 coneMat.userData.noShoot = true;
-const LAMP_LIGHTS = [], LAMP_HEADS = [];
+const LAMP_LIGHTS = [], LAMP_HEADS = [], CONES = { list: [], im: null };
+function buildCones() {
+  if (!CONES.list.length) return;
+  const im = new THREE.InstancedMesh(twoSidedIndex(new THREE.ConeGeometry(2.3, 5, 32, 1, true)), coneMat, CONES.list.length);
+  CONES.list.forEach((m, i) => im.setMatrixAt(i, m)); im.userData.noLampShadow = true; world.add(im); CONES.im = im; STATIC_IM.push([im, 0.5]);
+}
 function lamp(x, z, side, alongX, tall) {
   const H = tall ? 8 : 6.2;
   B.add(new THREE.CylinderGeometry(0.07, 0.11, H, 10), MAT.pole, M4(x, H / 2, z));
@@ -167,8 +185,9 @@ function lamp(x, z, side, alongX, tall) {
     const ox = alongX ? 0 : sd * 0.66, oz = alongX ? sd * 0.66 : 0, hx = alongX ? 0 : sd * 1.32, hz = alongX ? sd * 1.32 : 0;
     B.add(boxG(alongX ? 0.07 : 1.4, 0.07, alongX ? 1.4 : 0.07), MAT.pole, M4(x + ox, H - 0.08, z + oz));
     B.add(boxG(alongX ? 0.32 : 0.6, 0.17, alongX ? 0.6 : 0.32), MAT.pole, M4(x + hx, H - 0.18, z + hz));
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.3, H - 1.2, 32, 1, true), coneMat);
-    cone.position.set(x + hx, H - 0.3 - (H - 1.2) / 2, z + hz); world.add(cone);
+    // le cône de lumière : une case dans un lot commun (voir buildCones), qu'on éteint en la réduisant à rien
+    const cone = { i: CONES.list.length, set visible(v) { if (CONES.im) { CONES.im.setMatrixAt(this.i, v ? CONES.list[this.i] : ZM4); CONES.im.instanceMatrix.needsUpdate = true; } } };
+    CONES.list.push(new THREE.Matrix4().compose(new V3(x + hx, H - 0.3 - (H - 1.2) / 2, z + hz), new THREE.Quaternion(), new V3(1, (H - 1.2) / 5, 1)));
     const light = addSoft(x + hx, H - 0.6, z + hz, '#ffcdb8', 2.2, 11); light.sh = 1;
     LAMP_LIGHTS.push(light);
     LAMP_HEADS.push({ id: LAMP_HEADS.length, x: x + hx, y: H - 0.2, z: z + hz, hx: alongX ? 0.17 : 0.31, hy: 0.13, hz: alongX ? 0.31 : 0.17, c: 1, s: 0, light, cone, alive: true, tDead: 0,
@@ -179,7 +198,7 @@ function lamp(x, z, side, alongX, tall) {
 LAMPS_DEF.forEach((l) => lamp(l.x, l.z, l.side, l.alongX));
 // ampoules à part : on peut les faire éclater d'une balle
 const bulbIM = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), MAT.bulb, LAMP_HEADS.length);
-LAMP_HEADS.forEach((h) => bulbIM.setMatrixAt(h.id, h.bm)); bulbIM.frustumCulled = false; world.add(bulbIM);
+LAMP_HEADS.forEach((h) => bulbIM.setMatrixAt(h.id, h.bm)); bulbIM.frustumCulled = false; world.add(bulbIM); STATIC_IM.push([bulbIM, 1]);
 const ZM4 = new THREE.Matrix4().makeScale(0, 0, 0);
 function rayLamps(o, d, best, res) {
   for (const h of LAMP_HEADS) { if (!h.alive) continue; const t = rayOBB(o, d, h, best); if (t < best) { best = t; res.t = t; res.kind = 'lampe'; res.lamp = h; res.n.copy(_rn); } }

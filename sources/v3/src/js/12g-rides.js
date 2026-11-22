@@ -44,7 +44,7 @@ const _rm4 = new THREE.Matrix4(), _rv = new V3(), _rq = new THREE.Quaternion(), 
   for (const s of [-1, 1]) { ns.push(vc(boxG(1.5, 0.62, 0.06), M4(0, -2.58, s * 0.72), '#ffffff')); ns.push(vc(boxG(0.06, 0.62, 1.5), M4(s * 0.72, -2.58, 0), '#ffffff')); }
   const im = new THREE.InstancedMesh(mergeGeos(ns), VCMAT, W.n); ns.forEach((g) => g.dispose());
   for (let i = 0; i < W.n; i++) im.setColorAt(i, C(PASTELS[i % PASTELS.length]));
-  im.castShadow = true; im.frustumCulled = false; world.add(im); W.pods = im;
+  im.castShadow = true; im.frustumCulled = false; world.add(im); W.pods = im; STATIC_IM.push([im, 0, new THREE.Sphere(new V3(W.x, W.y, W.z), R + 5)]);
   for (let i = 0; i < 36; i++) W.bulbs.push(bulb(W.x, W.y, W.z + 1.3, i, 0.09));
   for (let i = 0; i < 12; i++) W.bulbs.push(bulb(W.x, W.y, W.z + 1.3, i + 2, 0.08));
   // portique d'embarquement
@@ -79,7 +79,7 @@ const _rm4 = new THREE.Matrix4(), _rv = new V3(), _rq = new THREE.Quaternion(), 
   for (const [dx, dz, rx] of [[-0.13, 0.3, 0.35], [0.13, 0.3, 0.35], [-0.13, -0.3, -0.3], [0.13, -0.3, -0.3]]) hs.push(vc(cylG(0.05, 0.04, 0.46, 6), M4(dx, -0.4, dz, rx), '#d8d8e0'));
   const hm = new THREE.InstancedMesh(mergeGeos(hs), VCMAT, K.n); hs.forEach((g) => g.dispose());
   for (let i = 0; i < K.n; i++) hm.setColorAt(i, C(PASTELS[(i * 3) % PASTELS.length]));
-  hm.castShadow = true; hm.frustumCulled = false; world.add(hm); K.horses = hm;
+  hm.castShadow = true; hm.frustumCulled = false; world.add(hm); K.horses = hm; STATIC_IM.push([hm, 0, new THREE.Sphere(new V3(K.x, 2, K.z), K.r + 4)]);
   for (let i = 0; i < 16; i++) bulb(K.x + Math.cos(i * PI / 8) * 5.75, K.y + top - 0.62, K.z + Math.sin(i * PI / 8) * 5.75, i, 0.075);
   addSoft(K.x + 3, 3.2, K.z + 3, '#ffd9ec', 1.5, 8); addSoft(K.x - 3, 3.2, K.z - 3, '#ffe9a8', 1.5, 8);
 })();

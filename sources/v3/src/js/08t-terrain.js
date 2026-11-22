@@ -74,7 +74,16 @@ const terrainMat = std({ color: C('#ffffff'), map: TB.sand, normalMap: TB.sand.u
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setAttribute('aW', new THREE.BufferAttribute(aw, 3));
   g.setIndex(idx); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, terrainMat); m.receiveShadow = true; m.userData.surface = 'herbe'; m.userData.noLampShadow = true; m.frustumCulled = false; world.add(m);
+  // le sol est découpé en dalles qui partagent les mêmes sommets : seules celles qui sont dans le champ partent vers la carte graphique
+  const TS = 44, pt = new V3();
+  for (let j0 = 0; j0 < nz - 1; j0 += TS) for (let i0 = 0; i0 < nx - 1; i0 += TS) {
+    const j1 = Math.min(nz - 1, j0 + TS), i1 = Math.min(nx - 1, i0 + TS), id = [], box = new THREE.Box3();
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; id.push(a, c, b, b, c, d); }
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * nx + i; box.expandByPoint(pt.set(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2])); }
+    const tg = new THREE.BufferGeometry(); for (const k in g.attributes) tg.setAttribute(k, g.attributes[k]); tg.setIndex(id);
+    tg.boundingBox = box; tg.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+    const m = new THREE.Mesh(tg, terrainMat); m.receiveShadow = true; m.userData.surface = 'herbe'; m.userData.noLampShadow = true; m.matrixAutoUpdate = false; m.renderOrder = 6; world.add(m);      // le sol passe après les constructions : ce qu'elles cachent n'est pas calculé
+  }
 }
 /* ---------- la mer ---------- */
 const HM = (() => {
@@ -96,6 +105,7 @@ const WAVE_GLSL = 'void wave1(vec2 p, float t, vec2 D, float k, float w, float A
 const BRK_GLSL = 'vec3 brk(float depth, vec2 p, float t){ float ph = depth * 7.0 + t * 1.1 + sin(p.x * 0.05 + t * 0.2) * 0.8 + sin(p.x * 0.013) * 1.7, s = max(sin(ph), 0.0), A = smoothstep(0.03, 0.5, depth) * (1.0 - smoothstep(0.9, 2.4, depth)) * 0.2; return vec3(A * s * s, A * 2.0 * s * cos(ph), s); }';
 const SEA_GRID = { ultra: [192, 1.042], haute: [160, 1.05], moyenne: [112, 1.07], basse: [80, 1.1] }[qualiteNom] || [160, 1.05];
 const HM_GLSL = (name) => 'float ' + name + '(vec2 p){ float v = texture2D(uHM, (p - uHMr.xy) * uHMr.zw).r; return ' + (HM.packed ? 'v * 32.0 - 13.0' : 'v') + '; }';
+const SEA_TOP = THREE.FrontSide;      // vue d'au-dessus, une seule face de la mer suffit (les deux reviennent dès qu'on s'approche de l'eau)
 const seaMat = new THREE.ShaderMaterial({
   uniforms: Object.assign({
     uTime: clockU, uSeaY: terrainU.uSeaY, uNight: NIGHT, uHM: { value: HM.t }, uHMr: { value: HM.r }, uGeo: { value: 0.05 / (SEA_GRID[1] - 1) }, uCalm: { value: 0 }, uNet: { value: 0.25 },
@@ -208,14 +218,14 @@ const buoys = new THREE.Group(); world.add(buoys);
 {
   const im = new THREE.InstancedMesh(new THREE.SphereGeometry(0.55, 14, 10), std({ color: C('#ffffff'), roughness: 0.35, emissive: C('#ff5f9f'), emissiveIntensity: 0.35 }), 26);
   for (let i = 0; i < 26; i++) { im.setMatrixAt(i, M4(-175 + i * 14, 0.1, -188)); im.setColorAt(i, C(i % 2 ? '#ff7fb0' : '#fff5fa')); }
-  im.frustumCulled = false; buoys.add(im);
+  im.frustumCulled = false; buoys.add(im); STATIC_IM.push([im, 1]);
 }
 // l'eau revient : la mer monte à la tombée de la nuit, se retire au petit matin
 function updateSea(dt) {
   SEA.surf = SEA.low + SEA.range * smooth(0.15, 1, NIGHT.value);
   terrainU.uSeaY.value = SEA.surf; buoys.position.y = SEA.surf + Math.sin(clockU.value * 0.9) * 0.06;
   terrainU.uSunD.value.copy(NIGHT.value > 0.5 ? LIGHT_DIR : SKY_SUN).normalize(); terrainU.uSunK.value = NIGHT.value > 0.5 ? 0.45 * smooth(0.5, 1, NIGHT.value) : smooth(-0.04, 0.05, SKY_SUN.y) * (1 - smooth(0.2, 0.5, NIGHT.value));
-  const hc = camera.position.y - SEA.surf; seaMat.uniforms.uCalm.value = hc < 0 ? 1 : 1 - smooth(0.45, 1.3, hc); seaMat.uniforms.uNet.value = lerp(0.2, 0.34, NIGHT.value);
+  const hc = camera.position.y - SEA.surf; seaMat.side = hc < 2.2 ? THREE.DoubleSide : SEA_TOP; seaMat.uniforms.uCalm.value = hc < 0 ? 1 : 1 - smooth(0.45, 1.3, hc); seaMat.uniforms.uNet.value = lerp(0.2, 0.34, NIGHT.value);
   const fw = seaMat.uniforms.uFW.value; fw.multiplyScalar(Math.exp(-dt * 2.2));
 }
 

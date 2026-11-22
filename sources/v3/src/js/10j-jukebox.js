@@ -181,17 +181,17 @@ function buildJukebox(x, y, z, ang, colA, owner, room) {
   chrome.push(prepGeo(new THREE.SphereGeometry(0.05, 16, 10), M4(0, JH + JW / 2 + 0.06, 0)));
   chrome.push(prepGeo(new THREE.ConeGeometry(0.03, 0.09, 12), M4(0, JH + JW / 2 + 0.14, 0)));
   for (const s of [-1, 1]) chrome.push(prepGeo(boxG(0.012, 0.9, 0.05), M4(s * (JW / 2 + 0.04), 0.62, 0)));
-  chrome.push(prepGeo(new THREE.TubeGeometry(archCurve(0.3, 1.0, JH, FP + 0.012), 90, 0.012, 6, false)));
+  chrome.push(prepGeo(new THREE.TubeGeometry(archCurve(0.3, 1.0, JH, FP + 0.012), 44, 0.012, 5, false)));
   chrome.push(prepGeo(boxG(0.62, 0.022, 0.03), M4(0, 1.0, FP + 0.012)));
-  chrome.push(prepGeo(new THREE.TubeGeometry(rectCurve(0.64, 0.5, 0.05, 0, 0.38, FP + 0.008), 60, 0.011, 6, true)));
-  chrome.push(prepGeo(new THREE.TubeGeometry(rectCurve(0.7, 0.22, 0.03, 0, 0.83, FP + 0.035), 40, 0.01, 6, true)));
+  chrome.push(prepGeo(new THREE.TubeGeometry(rectCurve(0.64, 0.5, 0.05, 0, 0.38, FP + 0.008), 52, 0.011, 5, true)));
+  chrome.push(prepGeo(new THREE.TubeGeometry(rectCurve(0.7, 0.22, 0.03, 0, 0.83, FP + 0.035), 36, 0.01, 5, true)));
   chrome.push(prepGeo(boxG(0.09, 0.05, 0.02), M4(0.36, 0.68, FP + 0.01))); chrome.push(prepGeo(boxG(0.05, 0.008, 0.024), M4(0.36, 0.68, FP + 0.012)));
   chrome.push(prepGeo(boxG(0.16, 0.014, 0.014), M4(0.2, 1.33, FP + 0.02, 0, 0, -0.65))); chrome.push(prepGeo(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 10).rotateX(Math.PI / 2), M4(0.26, 1.38, FP + 0.02)));
   // néons en arche et ruban de LED sur le pourtour
-  neon.push(prepGeo(new THREE.TubeGeometry(archCurve(0.345, 1.0, JH, FP + 0.02), 140, 0.016, 8, false)));
-  neon.push(prepGeo(new THREE.TubeGeometry(archCurve(0.39, 0.14, JH, FP + 0.022), 200, 0.02, 8, false)));
-  neon.push(ledUV(prepGeo(new THREE.TubeGeometry(archCurve(0.445, 0.07, JH, F0 + 0.006), 260, 0.012, 6, false))));
-  neon.push(ledUV(prepGeo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V3(-0.44, 0.075, F0 + 0.01), new V3(0.44, 0.075, F0 + 0.01)]), 30, 0.012, 6, false))));
+  neon.push(prepGeo(new THREE.TubeGeometry(archCurve(0.345, 1.0, JH, FP + 0.02), 60, 0.016, 6, false)));
+  neon.push(prepGeo(new THREE.TubeGeometry(archCurve(0.39, 0.14, JH, FP + 0.022), 72, 0.02, 6, false)));
+  neon.push(ledUV(prepGeo(new THREE.TubeGeometry(archCurve(0.445, 0.07, JH, F0 + 0.006), 96, 0.012, 5, false))));
+  neon.push(ledUV(prepGeo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V3(-0.44, 0.075, F0 + 0.01), new V3(0.44, 0.075, F0 + 0.01)]), 8, 0.012, 5, false))));
   // façade dessinée : cartes des titres (inclinées), grille, fond de vitrine, afficheur
   face.push(atlasUV(prepGeo(planeG(0.66, 0.194), M4(0, 0.83, FP + 0.03, -0.28, 0, 0)), ATL.cards));
   face.push(atlasUV(prepGeo(planeG(0.62, 0.48), M4(0, 0.38, FP + 0.003)), ATL.grill));
@@ -257,9 +257,9 @@ for (const [x, z, a, c] of [[-56, 13, Math.PI, '#ffc2dc'], [-18, 13, Math.PI, '#
   merge(SPK.body, JB_BODY); merge(SPK.chrome, MAT.chrome);
   SPK.coneIM = new THREE.InstancedMesh(SPK_CONE, std({ color: C('#2a1d45'), roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide }), SPK.cones.length);
   SPK.cones.forEach((c, i) => SPK.coneIM.setMatrixAt(i, c.m.clone().multiply(M4(0, 0, 0, 0, 0, 0, c.s, c.s, c.s))));
-  SPK.coneIM.castShadow = true; SPK.coneIM.frustumCulled = false; world.add(SPK.coneIM);
+  SPK.coneIM.castShadow = true; SPK.coneIM.frustumCulled = false; world.add(SPK.coneIM); STATIC_IM.push([SPK.coneIM, 0.5]);
   SPK.ringIM = new THREE.InstancedMesh(ledUV(new THREE.TorusGeometry(0.228, 0.011, 6, 72)), JB_NEON, SPK.rings.length);
-  SPK.rings.forEach((m, i) => SPK.ringIM.setMatrixAt(i, m)); SPK.ringIM.frustumCulled = false; world.add(SPK.ringIM);
+  SPK.rings.forEach((m, i) => SPK.ringIM.setMatrixAt(i, m)); SPK.ringIM.frustumCulled = false; world.add(SPK.ringIM); STATIC_IM.push([SPK.ringIM, 0.5]);
 }
 
 /* ---------- son : un seul lecteur pour tout le quartier ---------- */

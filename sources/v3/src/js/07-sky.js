@@ -147,7 +147,8 @@ const skyMat = new THREE.ShaderMaterial({
 });
 let mountWire = null, coastLights = null;
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 48, 24), skyMat);
-sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
+// le ciel est dessiné après tout le décor opaque : seuls les points d'image où on le voit vraiment sont calculés (son calcul de nuages est coûteux)
+sky.renderOrder = 30; sky.frustumCulled = false; scene.add(sky);
 {
   const segX = 240, segY = 7, Rm = 780, H0 = -6;
   const g = new THREE.PlaneGeometry(1, 1, segX, segY);
@@ -171,7 +172,7 @@ sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
     fragmentShader: 'uniform vec3 uHor, uLow; uniform float uNight; varying vec3 vC; varying float vV; void main(){ vec3 c = vC * mix(1.0, 0.15, uNight); c = mix(mix(uHor, uLow, 0.35), c, smoothstep(-0.1, 0.55, vV) * mix(0.82, 0.92, uNight)); gl_FragColor = vec4(c, 1.0); }',
     side: THREE.DoubleSide
   }));
-  mt.renderOrder = -5; mt.frustumCulled = false; scene.add(mt);
+  mt.renderOrder = 20; mt.frustumCulled = false; scene.add(mt);
   const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: HDR('#ff9be0', 1.25), wireframe: true, transparent: true, opacity: 0.4, fog: false }));
   wire.renderOrder = -4; scene.add(wire); mountWire = wire.material;
   // lumières de la côte : de petites villes au pied des collines, qui s'allument à la tombée de la nuit

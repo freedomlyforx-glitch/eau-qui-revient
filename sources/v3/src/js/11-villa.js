@@ -130,7 +130,7 @@ refugeDoor = (() => {
   const mk = (x, z, ry, sw) => {
     const pivot = new THREE.Group(); pivot.position.set(x, RFB, z); pivot.rotation.y = ry;
     const leaf = new THREE.Mesh(boxB(0, 1.2, 0, 2.25, -0.035, 0.035), colorMat('#ff8fcf', { roughness: 0.45 })); leaf.castShadow = true; pivot.add(leaf);
-    const wn = new THREE.Mesh(new THREE.CircleGeometry(0.17, 20), kitGlass); wn.position.set(0.6, 1.6, 0.04); pivot.add(wn);
+    const wn = new THREE.Mesh(twoSided(new THREE.CircleGeometry(0.17, 20)), kitGlass); wn.position.set(0.6, 1.6, 0.04); pivot.add(wn);
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), MAT.gold); knob.position.set(1.05, 1.0, 0.06); pivot.add(knob);
     const lockLight = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: HDR('#7dffb8', 3) })); lockLight.position.set(1.05, 1.2, 0.06); pivot.add(lockLight);
     const l2 = lockLight.clone(); l2.position.z = -0.06; pivot.add(l2);

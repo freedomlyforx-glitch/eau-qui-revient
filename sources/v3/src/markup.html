@@ -5,6 +5,7 @@
     <div class="ligne"><span class="point"></span><span>LECTURE</span></div>
     <div class="petit" id="vhsDate">SAM. 31 OCT. 2026</div>
     <div class="petit"><span id="vhsHeure">19:47</span>&nbsp;&nbsp;<span id="vhsTemps">00:00:00</span></div>
+    <div class="petit" id="ips" hidden></div>
   </div>
   <div class="boss" id="boss" style="opacity:0"><div class="nom">LE REVENANT</div><div class="barre"><i id="bossBarre"></i></div></div>
   <i class="coin c1"></i><i class="coin c2"></i><i class="coin c3"></i><i class="coin c4"></i>
@@ -157,6 +158,7 @@
         <select id="revenant" class="champ" style="font-family:var(--f-vhs);font-size:20px;background:rgba(0,0,0,.25);color:var(--encre);border:1px solid var(--trait);padding:4px"><option value="nuit">La nuit seulement</option><option value="toujours">Jour et nuit</option><option value="jamais">Jamais (balade tranquille)</option></select><span></span></label>
       <label class="coupe" for="coupeMusique"><input type="checkbox" id="coupeMusique"> Couper la musique</label>
       <label class="coupe" for="coupeArmes"><input type="checkbox" id="coupeArmes"> Couper le bruit des armes</label>
+      <label class="coupe" for="voirIps"><input type="checkbox" id="voirIps"> Afficher la fluidité (images par seconde)</label>
     </div>
     <div class="actions">
       <button class="bouton" id="reprendre" type="button"><span class="tri"></span>Reprendre</button>

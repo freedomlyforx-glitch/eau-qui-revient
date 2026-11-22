@@ -1,11 +1,14 @@
 /* =========================================================
    Assemblage final du décor puis boucle principale
    ========================================================= */
-B.build(world, 'dur', SHOOT);
+mergeShadowCasters(B.build(world, 'dur', SHOOT));
+// la passe d'ombre regarde aussi la couche 3, où vivent ces formes réunies ; aucune autre passe ne la voit
+{ const sm = renderer.shadowMap, r0 = sm.render, cam3 = { layers: new THREE.Layers() }; cam3.layers.enable(3); sm.render = function (lights, sc) { return r0.call(this, lights, sc, cam3); }; }
 BF.build(world, 'feuille', SHOOT);
 buildDestr(world);
 buildBulbs();
 buildKit();
+buildCones();
 initLampShadow();
 const ENV_MATTE = 0.38;
 // matières : relief et brillance branchés automatiquement sur tout ce qui porte une texture de l'atelier,
@@ -29,12 +32,35 @@ if (window.MeshBVHLib) {
   const p = bg.attributes.position;
   for (let i = 0; i < p.count; i++) { const v = new V3(p.getX(i), p.getY(i), p.getZ(i)); const n = 1 + 0.16 * Math.sin(v.x * 4.1 + v.y * 2.3) * Math.cos(v.z * 3.7); v.multiplyScalar(n); v.y *= 0.82; p.setXYZ(i, v.x, v.y, v.z); }
   bg.computeVertexNormals();
-  const im = new THREE.InstancedMesh(bg, std({ color: C('#ffffff'), roughness: 0.9, envMapIntensity: 0.5 }), bushes.length);
-  bushes.forEach((b, i) => { im.setMatrixAt(i, M4(b[0], b[3] * 0.5 + (b[1] > 0.3 && b[1] < 0.4 ? 0.16 : 0), b[2], 0, R() * 6, 0, b[3], b[3], b[3])); im.setColorAt(i, C(b[4])); });
-  im.castShadow = true; im.receiveShadow = true; im.userData.surface = 'buisson';
-  world.add(im); SHOOT.push(im);
+  // rangés par bandes de terrain : une bande hors du champ (ou hors de la zone d'ombre) n'est pas envoyée à la carte graphique
+  const bmat = std({ color: C('#ffffff'), roughness: 0.9, envMapIntensity: 0.5 }), rots = bushes.map(() => R() * 6), bands = new Map();
+  bushes.forEach((b, i) => { const k = Math.floor((b[0] - MAP.x0) / 60) + '_' + (b[2] > 70 ? 1 : 0); if (!bands.has(k)) bands.set(k, []); bands.get(k).push(i); });
+  for (const list of bands.values()) {
+    const im = new THREE.InstancedMesh(bg, bmat, list.length);
+    list.forEach((bi, i) => { const b = bushes[bi]; im.setMatrixAt(i, M4(b[0], b[3] * 0.5 + (b[1] > 0.3 && b[1] < 0.4 ? 0.16 : 0), b[2], 0, rots[bi], 0, b[3], b[3], b[3])); im.setColorAt(i, C(b[4])); });
+    im.castShadow = true; im.receiveShadow = true; im.userData.surface = 'buisson';
+    world.add(im); SHOOT.push(im); STATIC_IM.push([im, 1]);
+  }
+}
+// surfaces translucides visibles des deux côtés (eau des bassins, filets, faisceaux de lumière) : le moteur les dessinait en deux fois.
+// Leurs deux faces sont maintenant dans la même géométrie, dessinée en une fois. La mer, elle, change de mode selon la hauteur du regard.
+{
+  const done = new Map(), mats = new Set();
+  world.traverse((o) => {      // (le décor seulement : les effets créés en cours de partie gardent leur matière d'origine)
+    const m = o.material;
+    if (!o.isMesh || !m || Array.isArray(m) || !m.transparent || m.side !== THREE.DoubleSide || m === seaMat || o.geometry.userData.vivant) return;
+    let g = done.get(o.geometry);
+    if (!g) { g = m.lights ? twoSided(o.geometry) : twoSidedIndex(o.geometry); done.set(o.geometry, g); done.set(g, g); }
+    o.geometry = g; mats.add(m);
+  });
+  for (const m of mats) { m.side = THREE.FrontSide; m.needsUpdate = true; }
 }
 if (window.MeshBVHLib) for (const m of SHOOT) { const g = m.geometry; if (g && !g.boundsTree && g.attributes.position && g.attributes.position.count > 240) { try { g.computeBoundsTree(); } catch (e) {} } }
+// lots fixes : une fois tout posé, on leur donne leur vraie enveloppe pour que le moteur saute ceux qui sont hors champ
+for (const [im, pad, sph] of STATIC_IM) fitInstanced(im, pad, sph);
+// lots d'objets : une matière d'ombre rien qu'à eux, pour que le moteur ne change pas de programme à chaque alternance avec un objet simple
+{ const dm = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); scene.traverse((o) => { if (o.isInstancedMesh && o.castShadow && !o.customDepthMaterial) o.customDepthMaterial = dm; }); }
+let TV_IMG = null;
 let last = performance.now(), perfAcc = 0, perfN = 0, perfGood = 0, shadowTick = 0, attractT = 0, tvFrame = 0, crtT = 0, pcT = 0;
 const _nightSea = C('#0c2a48');
 const UNDER_FOG = C('#2b8fa8'), BASE_FOG = FOG_COLOR.clone(), INDOOR = { fog: 0.0018, bloom: 0.5, expo: 1.25 };
@@ -62,15 +88,21 @@ function updateEnv(dt) {
   for (const c of clouds) { c.s.position.x += c.sp * dt * 0.6; if (c.s.position.x > 700) c.s.position.x = -660; }
   for (const c of lowClouds) { c.s.position.x += c.sp * dt; if (c.s.position.x > MAP.x1 + 10) c.s.position.x = MAP.x0 - 10; }
   MAT.amber.color.setHex(0xffc070).multiplyScalar(Math.sin(t * 5) > 0 ? 3.5 : 0.25);
-  if ((tvFrame = (tvFrame + 1) % 3) === 0) {
-    const g = tvCanvas[1], img = g.createImageData(96, 72), d = img.data;
+  // écrans (télés, ordinateur) : leur image n'est redessinée que si on est assez près pour la voir
+  let ecrans = false; { const cx = camera.position.x, cz = camera.position.z;
+    if (Math.abs(cx - (REFUGE.x0 + REFUGE.x1) / 2) < 46 && Math.abs(cz - (REFUGE.z0 + REFUGE.z1) / 2) < 42) ecrans = true;
+    else for (let i = 0; i < HOUSE_LOTS.length; i++) { const L = HOUSE_LOTS[i]; if (Math.abs(cx - L.x) < 40 && Math.abs(cz - L.z) < 40) { ecrans = true; break; } }
+    if (PC.phase) ecrans = true; }
+  if (ecrans && (tvFrame = (tvFrame + 1) % 3) === 0) {
+    if (!TV_IMG) TV_IMG = tvCanvas[1].createImageData(96, 72);
+    const g = tvCanvas[1], img = TV_IMG, d = img.data;
     for (let i = 0; i < d.length; i += 4) { const v = Math.random() * 255; d[i] = v * 0.95; d[i + 1] = v * 0.9; d[i + 2] = v; d[i + 3] = 255; }
     g.putImageData(img, 0, 0);
     if (Math.sin(t * 0.7) > 0.86) { g.fillStyle = 'rgba(255,190,225,0.95)'; g.font = 'bold 13px Arial, sans-serif'; g.textAlign = 'center'; g.fillText('RÉVEILLE-TOI', 48, 40); }
     T.tv.needsUpdate = true;
   }
-  crtT -= dt; if (crtT <= 0) { crtT = 0.1; drawCRT(t); }
-  pcT -= dt; if (pcT <= 0) { pcT = 0.25; drawPC(t); }
+  if (ecrans) { crtT -= dt; if (crtT <= 0) { crtT = 0.1; drawCRT(t); }
+    pcT -= dt; if (pcT <= 0) { pcT = 0.25; drawPC(t); } }
   for (const l of LAMP_LIGHTS) l.k = l.base * (0.3 + 0.7 * NIGHT.value);
   coneMat.uniforms.uColor.value.setRGB(1.0, 0.82, 0.78).multiplyScalar(0.35 + 0.65 * NIGHT.value);
   updateSoftLights(camera.position);
@@ -84,6 +116,8 @@ function frame(nowMs) {
   requestAnimationFrame(frame);
   const rdt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
   simulate(rdt, true);
+  IPS.n++; if (nowMs - IPS.t >= 1000) { if (IPS.on && IPS.t) $('ips').textContent = Math.round(IPS.n * 1000 / (nowMs - IPS.t)) + ' images/s · ' + qualiteNom + ' · ' + Math.round(pixelRatio * 100) + ' %'; IPS.n = 0; IPS.t = nowMs; }
+  if (!WARM.done && ++WARM.n === 20) warmUp();
 }
 function simulate(rdt, render) {
   clockU.value += rdt;
@@ -134,8 +168,13 @@ function simulate(rdt, render) {
   if (!render) return;
   shadowTick = (shadowTick + 1) % (PRESETS[qualiteNom].shadowEvery || 1);
   if (shadowTick === 0) { placeSun(camera.position.x, camera.position.y, camera.position.z); renderer.shadowMap.needsUpdate = true; }
-  updateGrass(); updateFx(); updateLampShadow(rdt); renderVolClouds(); renderReflection();
+  FRAME++;
+  updateGrass(); updateFx(); updateNear();
+  // les positions de tous les objets sont mises à jour une seule fois pour toutes les passes de l'image
+  scene.updateMatrixWorld(); scene.matrixWorldAutoUpdate = false;
+  updateLampShadow(rdt); renderVolClouds(); renderReflection();
   composer.render(rdt);
+  scene.matrixWorldAutoUpdate = true;
   if (PHOTO.snap) photoCapture();
   if (!$('prep').hidden) renderPreview(rdt);
   // définition adaptative : on la baisse si l'image saccade, on la remonte quand il y a de la marge ;
@@ -159,6 +198,13 @@ function simulate(rdt, render) {
   }
 }
 const PERF = { cap: 9, capT: 0, low: 0, fps: 60 };
+/* Pendant l'écran d'accueil, toutes les matières du niveau sont préparées d'avance par la carte graphique :
+   sans cela, chacune l'était à sa première apparition à l'écran, ce qui donnait de petits à-coups en tournant la tête au début de la partie. */
+const WARM = { done: false, n: 0 };
+function warmUp() {
+  WARM.done = true;
+  try { const rt = renderer.getRenderTarget(), sd = seaMat.side; renderer.setRenderTarget(composer.renderTarget1); camera.layers.mask = 1; seaMat.side = THREE.DoubleSide; renderer.compile(scene, camera); seaMat.side = sd; renderer.setRenderTarget(rt); } catch (e) { if (DEBUG) console.error('préparation des matières', e); }
+}
 // démarrage : le monstre se promène dans la rue pendant l'accueil
 M.state = 'dead'; M.form = 0; M.stateT = 0; M.pos.set(0, -40, -60);
 setGlove(PROFILE.couleur);
@@ -167,6 +213,6 @@ requestAnimationFrame((t) => { last = t; frame(t); });
 $('choixPC').disabled = false; $('choixMobile').disabled = false;
 noteEl.textContent = PREP.join ? 'Tu as été invité dans un rêve partagé : choisis ton appareil pour le rejoindre.' : '';
 if (IS_TOUCH) { try { $('choixMobile').focus({ preventScroll: true }); } catch (e) {} }
-if (DEBUG) window.__dbg = { VCL, LSH, LSHU, WETU, KW, kwDestroy, BK, PERF, REFL, GRASS, applyQuality, applyStyle, fxMat, sun, hemi, SKYU, FOGU, TH, SEA, TIME, NIGHT, setTimeOfDay, ACT, RIDES, BULBS, terrainU, seaMat, REV, FW, boardRide, leaveRide, actInteract, interact, updateHint, fwSalvo, togglePhoto, PHOTO, sleepInBed, DUCKS, CANS, HOOP, FISH, COQ, SIMON, FLAQ, PIANO, G_DUCKS, G_CANS, G_HOOP, FRONT, pickVersion, poolAt, inSea, monsterAllowed, get hint() { return interactHint; }, SHOOT, rayHouses, rayBalls, step: (n, dt) => { for (let i = 0; i < n; i++) simulate(dt || 0.05, false); }, shoot, traceShot, applyHit, curW, WEAPONS, MODELS, myBeam, refugeDoor, CROWNS, RES, softLights, zoneCur, get bloom() { return bloom; }, finalPass, scene, FOG, P, M, WPN, NET, PREP, PROFILE, SHEEP, houses, panels, glasses, pools, PORTALS, TRAMPS, camera, renderer, startGame, chooseDevice, killMonster, respawnMonster, hurtPlayer, destroyPanel, collapseHouse, shakePalm, explodeSheep, switchWeapon, enterPC, exitPC, PC, teleport, toggleRefugeLock, setState: (s) => { gameState = s; }, keys, sheepMatrices, CHAT, openChat, onChatMessage, translate, allPlayers, get ballCount() { return ballCount; }, DESTR, JET, spawnJetpack, equipJetpack, LAGOONS, SLIDES, BIGB, CARS, LAMP_HEADS, openVersions, PCMENU, groundAt, floors, PALMS, DIVES, SHOPS, LAGOONS_DEF, makeAvatar, animateAvatar, setKills: (n) => { kills = n; }, JUKE, TRACKS, jukePlay, jukeStop, jukeChoose, openJukeMenu, nearJukebox, jukeInside, MUS, AU, SPK, VOL, get kills() { return kills; } };
+if (DEBUG) window.__dbg = { simulate, composer, STATIC_IM, WARM, warmUp, NEAR, FLOWER_CELLS, IPS, VCL, LSH, LSHU, WETU, KW, kwDestroy, BK, PERF, REFL, GRASS, applyQuality, applyStyle, fxMat, sun, hemi, SKYU, FOGU, TH, SEA, TIME, NIGHT, setTimeOfDay, ACT, RIDES, BULBS, terrainU, seaMat, REV, FW, boardRide, leaveRide, actInteract, interact, updateHint, fwSalvo, togglePhoto, PHOTO, sleepInBed, DUCKS, CANS, HOOP, FISH, COQ, SIMON, FLAQ, PIANO, G_DUCKS, G_CANS, G_HOOP, FRONT, pickVersion, poolAt, inSea, monsterAllowed, get hint() { return interactHint; }, SHOOT, rayHouses, rayBalls, step: (n, dt) => { for (let i = 0; i < n; i++) simulate(dt || 0.05, false); }, shoot, traceShot, applyHit, curW, WEAPONS, MODELS, myBeam, refugeDoor, CROWNS, RES, softLights, zoneCur, get bloom() { return bloom; }, finalPass, scene, FOG, P, M, WPN, NET, PREP, PROFILE, SHEEP, houses, panels, glasses, pools, PORTALS, TRAMPS, camera, renderer, startGame, chooseDevice, killMonster, respawnMonster, hurtPlayer, destroyPanel, collapseHouse, shakePalm, explodeSheep, switchWeapon, enterPC, exitPC, PC, teleport, toggleRefugeLock, setState: (s) => { gameState = s; }, keys, sheepMatrices, CHAT, openChat, onChatMessage, translate, allPlayers, get ballCount() { return ballCount; }, DESTR, JET, spawnJetpack, equipJetpack, LAGOONS, SLIDES, BIGB, CARS, LAMP_HEADS, openVersions, PCMENU, groundAt, floors, PALMS, DIVES, SHOPS, LAGOONS_DEF, makeAvatar, animateAvatar, setKills: (n) => { kills = n; }, JUKE, TRACKS, jukePlay, jukeStop, jukeChoose, openJukeMenu, nearJukebox, jukeInside, MUS, AU, SPK, VOL, get kills() { return kills; } };
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) { try { hot.snapshot(() => ({ kills })); } catch (e) {} }

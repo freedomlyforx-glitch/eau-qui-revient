@@ -233,8 +233,11 @@ function updateMonster(dt, authority, players) {
   const seen = inView(M.pos.x, gy + 2, M.pos.z, 4.2);
   mc.material = MON_HI && camD < 32 ? waterMatHi : waterMatLo;
   M.mcT = (M.mcT || 0) - dt;
-  if (seen && (camD < 22 || M.mcT <= 0)) {
-    M.mcT = camD < 45 ? 1 / 30 : 1 / 15;
+  // sa surface est recalculée à chaque image de près sur ordinateur ; sur les réglages légers, une image sur deux,
+  // et jamais la même image que les ombres, pour que la charge reste régulière
+  const nSh = PRESETS[qualiteNom].shadowEvery || 1, leger = nSh > 1;
+  if (seen && ((!leger && camD < 22) || camD < 3.5 || (M.mcT <= 0 && (!leger || camD >= 45 || (shadowTick + 1) % nSh !== 0)))) {
+    M.mcT = camD < 45 ? 0.03 : 1 / 15;
     mc.reset();
     const bb = M.balls;
     for (let i = 0; i < bb.length; i += 4) if (bb[i + 3] > 0.02) mc.addBall(bb[i], bb[i + 1], bb[i + 2], bb[i + 3], SUB);

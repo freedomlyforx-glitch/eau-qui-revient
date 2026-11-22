@@ -2,7 +2,7 @@
    Kit de construction : murs percés, garde-corps, enseignes néon,
    guirlandes d'ampoules (et leurs reflets sur l'eau)
    ========================================================= */
-const kitGlass = std({ color: C('#d9f3ff'), map: T.glass, transparent: true, roughness: 0.05, metalness: 0.2, envMapIntensity: 1.6, side: THREE.DoubleSide, depthWrite: false });
+const kitGlass = std({ color: C('#d9f3ff'), map: T.glass, transparent: true, roughness: 0.05, metalness: 0.2, envMapIntensity: 1.6, depthWrite: false });   // une face : les vitres ont une géométrie doublée
 const stuccoFor = (col) => cached('st' + col, () => std({ color: C(col), map: T.stucco, roughness: 0.85 }));
 // ajoute un objet libre au monde en respectant la hauteur de construction courante
 function wadd(m, surf) { m.position.y += YOFF; world.add(m); if (surf) { m.userData.surface = surf; SHOOT.push(m); } return m; }
@@ -65,11 +65,11 @@ function buildKit() {
     const m = g.mat.map ? cached('kw' + g.mat.uuid, () => std({ color: g.mat.color.clone(), map: g.mat.map, normalMap: g.mat.normalMap || null, roughness: g.mat.roughness, metalness: g.mat.metalness, envMapIntensity: g.mat.envMapIntensity }, kwWorldUV)) : g.mat;
     if (g.mat.map && g.mat.normalMap) m.normalScale.copy(g.mat.normalScale);
     g.im = new THREE.InstancedMesh(unit, m, g.list.length); g.list.forEach((h) => g.im.setMatrixAt(h.i, h.m));
-    g.im.castShadow = true; g.im.receiveShadow = true; g.im.frustumCulled = false; world.add(g.im);
+    g.im.castShadow = true; g.im.receiveShadow = true; g.im.frustumCulled = false; world.add(g.im); STATIC_IM.push([g.im, 0.5]);
   }
   if (KW.panes.length) {
-    KW.glassIM = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), kitGlass, KW.panes.length); KW.panes.forEach((p) => KW.glassIM.setMatrixAt(p.i, p.m));
-    KW.glassIM.frustumCulled = false; KW.glassIM.renderOrder = 3; world.add(KW.glassIM);
+    KW.glassIM = new THREE.InstancedMesh(twoSided(new THREE.PlaneGeometry(1, 1)), kitGlass, KW.panes.length); KW.panes.forEach((p) => KW.glassIM.setMatrixAt(p.i, p.m));
+    KW.glassIM.frustumCulled = false; KW.glassIM.renderOrder = 3; world.add(KW.glassIM); STATIC_IM.push([KW.glassIM, 0.5]);
   }
 }
 function kwShow(w, on) { for (const h of w.parts) { h.g.im.setMatrixAt(h.i, on ? h.m : ZERO4); h.g.im.instanceMatrix.needsUpdate = true; } w.col.on = on; }
@@ -123,7 +123,7 @@ function kitRail(ax, az, bx, bz, y, mat, h) {
 // enseigne néon : texte lumineux posé sur un mur (ry = orientation de la face)
 const SIGNS = [];
 function kitSign(text, color, x, y, z, ry, w, h, k) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: neonTex(text, color, 512, Math.round(512 * h / w)), color: HDR('#ffffff', k || 2.6), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(twoSidedIndex(new THREE.PlaneGeometry(w, h)), new THREE.MeshBasicMaterial({ map: neonTex(text, color, 512, Math.round(512 * h / w)), color: HDR('#ffffff', k || 2.6), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   m.position.set(x, y, z); m.rotation.y = ry || 0; wadd(m); SIGNS.push(m); return m;
 }
 // marches droites : n marches qui montent de y0 à y1 en avançant de (dx, dz) par marche
@@ -165,7 +165,8 @@ function buildBulbs() {
     vertexShader: 'uniform float uTime, uNight; varying vec3 vC; varying vec3 vW; void main(){ vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0); vW = w.xyz; float ph = fract(dot(instanceMatrix[3].xyz, vec3(0.37, 0.61, 0.13))) * 60.0; float tw = 0.78 + 0.22 * sin(uTime * 2.6 + ph); vC = instanceColor * tw * (1.5 + 2.4 * uNight); gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: FOG_GLSL_PARS + ' varying vec3 vC; varying vec3 vW; void main(){ vec3 col = vC; ' + FOG_GLSL + ' gl_FragColor = vec4(col, 1.0); }'
   });
-  const im = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), mat, n);
+  // ampoules : de tout petits points lumineux, un solide à vingt faces suffit (quatre fois moins de triangles)
+  const im = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.06, qualiteNom === 'ultra' ? 1 : 0), mat, n);
   L.forEach((b, i) => { im.setMatrixAt(i, M4(b.x, b.y, b.z, 0, 0, 0, b.s, b.s, b.s)); im.setColorAt(i, b.c); });
   im.frustumCulled = false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); world.add(im); BULBS.mesh = im;
   if (BULBS.wires.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(BULBS.wires, 3)); const ln = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: C('#3a2f52') })); ln.frustumCulled = false; world.add(ln); }
@@ -178,7 +179,7 @@ function buildBulbs() {
   });
   const GL = BULBS.glints;
   if (GL.length) {
-    const g = new THREE.InstancedBufferGeometry(); const base = new THREE.PlaneGeometry(1, 1, 1, 12);
+    const g = new THREE.InstancedBufferGeometry(); const base = twoSidedIndex(new THREE.PlaneGeometry(1, 1, 1, 12));
     g.index = base.index; g.setAttribute('position', base.attributes.position);
     const ap = new Float32Array(GL.length * 3), ac = new Float32Array(GL.length * 3), ak = new Float32Array(GL.length * 2);
     GL.forEach((b, k) => { ap.set([b.x, b.y, b.z], k * 3); ac.set([b.c.r, b.c.g, b.c.b], k * 3); ak.set([b.k, b.w], k * 2); });
@@ -215,7 +216,7 @@ function buildBulbs() {
         '  float a = exp(-x * x * 20.0) * smoothstep(-0.07, 0.07, w.y + w2 * 0.9 + 0.02);',
         '  gl_FragColor = vec4(vC * a * vK * (0.04 + 0.96 * smoothstep(0.05, 0.7, uNight)), 1.0); }'
       ].join('\n'),
-      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
     });
     const gl = new THREE.Mesh(g, gm); gl.frustumCulled = false; gl.renderOrder = 4; world.add(gl); BULBS.glint = gl;
   }

@@ -272,11 +272,11 @@ LAGOONS.forEach((p, li) => {
   mine.forEach(([, m, c], i) => { im.setMatrixAt(i, m); im.setColorAt(i, C(c)); });
   im.castShadow = true; im.receiveShadow = true; im.userData.surface = 'dur';
   const bs = new THREE.Sphere(new V3(p.cx, 0, p.cz), Math.max(p.ax, p.az) * 1.35 + 8);
-  im.geometry = rockGeo; im.frustumCulled = false;
+  im.geometry = rockGeo; im.frustumCulled = false; STATIC_IM.push([im, 1]);
   im.raycast = function (rc, out) { if (!rc.ray.intersectsSphere(bs)) return; THREE.InstancedMesh.prototype.raycast.call(this, rc, out); };
   world.add(im); SHOOT.push(im);
 });
-const flameIM = new THREE.InstancedMesh(new THREE.ConeGeometry(0.11, 0.42, 8), torchFlameMat, TORCHES.length); flameIM.frustumCulled = false; world.add(flameIM);
+const flameIM = new THREE.InstancedMesh(new THREE.ConeGeometry(0.11, 0.42, 8), torchFlameMat, TORCHES.length); flameIM.frustumCulled = false; world.add(flameIM); STATIC_IM.push([flameIM, 2]);
 const BB_BALLS = BIGB.filter((b) => b.kind === 'ballon'), BB_RINGS = BIGB.filter((b) => b.kind === 'bouee');
 const ballIM = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 28, 18), std({ color: C('#ffffff'), map: T.beachBall, roughness: 0.3, envMapIntensity: 1.1 }), BB_BALLS.length);
 const ringIM = new THREE.InstancedMesh(new THREE.TorusGeometry(0.7, 0.3, 14, 30).rotateX(Math.PI / 2), std({ color: C('#ffffff'), roughness: 0.32, envMapIntensity: 1.0 }), BB_RINGS.length);
